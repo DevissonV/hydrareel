@@ -4,7 +4,7 @@ import { buildCaptionCues, buildRenderArgs } from '../src/features/rendering/inf
 describe('ffmpeg render command', () => {
   it('fuerza vertical H264 AAC y subtítulos ASS', () => {
     const args = buildRenderArgs('/tmp/source.mp4', '/tmp/out.mp4', '/tmp/captions.ass', {
-      startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', score: 80,
+      startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], score: 80,
     });
     const joined = args.join(' ');
     expect(joined).toContain('crop=1080:1920');
@@ -22,6 +22,15 @@ describe('ffmpeg render command', () => {
     expect(args.at(-1)).toBe('/tmp/out.mp4');
   });
 
+  it('usa composición subject-safe para fuentes horizontales', () => {
+    const args = buildRenderArgs('/tmp/source.mp4', '/tmp/out.mp4', '/tmp/captions.ass', {
+      startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], score: 80,
+    }, { sourceWidth: 1920, sourceHeight: 1080, hook: 'x', captionStyle: 'pulse' });
+    const joined = args.join(' ');
+    expect(joined).toContain('gblur=sigma=32');
+    expect(joined).toContain('overlay=(W-w)/2:(H-h)/2');
+  });
+
   it('genera captions cortos y como máximo dos líneas', () => {
     const words = [
       ['Bueno',0,0.3],['mi',0.31,0.48],['gente',0.49,0.8],['hoy',0.82,1.1],
@@ -30,7 +39,7 @@ describe('ffmpeg render command', () => {
     ].map(([word,start,end]) => ({ word:String(word), start:Number(start), end:Number(end) }));
 
     const cues = buildCaptionCues(words, {
-      startSeconds: 0, endSeconds: 6, title: 'x', hook: 'x', reason: 'x', score: 90,
+      startSeconds: 0, endSeconds: 6, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], score: 90,
     });
 
     expect(cues.length).toBeGreaterThan(1);
