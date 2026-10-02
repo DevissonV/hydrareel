@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipPolicyForDuration, validateAndNormalizeCandidates } from '../src/features/clip-brain/domain/clip-candidate';
+import { clipPolicyForDuration, normalizeHashtags, validateAndNormalizeCandidates } from '../src/features/clip-brain/domain/clip-candidate';
 
 describe('clip policy and candidate validation', () => {
   it('adapta duración y cantidad al tamaño del video', () => {
@@ -54,8 +54,14 @@ describe('clip policy and candidate validation', () => {
     expect(result[0].hook).toHaveLength(180);
     expect(result[0].reason).toHaveLength(300);
     expect(result[0].socialCaption).toHaveLength(600);
-    expect(result[0].hashtags).toEqual(['#uno', '#dos']);
+    expect(result[0].hashtags).toEqual(['#viral', '#fyp', '#uno', '#dos', '#reels']);
     expect(result[0].emphasisTerms).toEqual(['dinero', 'riesgo']);
+  });
+
+  it('siempre deja cinco hashtags con viral y fyp', () => {
+    expect(normalizeHashtags(['Humor', '#Barbería', '#Clientes', '#viral', '#humor']))
+      .toEqual(['#viral', '#fyp', '#Humor', '#Barbería', '#Clientes']);
+    expect(normalizeHashtags([])).toEqual(['#viral', '#fyp', '#reels', '#shorts', '#contenido']);
   });
 
   it('rechaza JSON inválido', () => {
