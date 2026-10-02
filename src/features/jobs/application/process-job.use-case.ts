@@ -191,6 +191,7 @@ export class ProcessJobUseCase implements OnModuleInit {
         sourceDuration: job.sourceDuration,
         createdAt: job.createdAt.toISOString(),
         completedAt,
+        processingDurationMs: job.timings.totalDurationMs,
         clips: job.clips,
       });
       job.transition('COMPLETED');
