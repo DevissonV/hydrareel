@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertCompositionSafe,
   buildCompositionPlan,
+  buildLayoutPreflight,
   decideCaptionPolicy,
   editorialRoleForCue,
   selectVisualIdentity,
@@ -50,6 +51,21 @@ describe('adaptive editorial composition', () => {
     expect(plan.caption.dialogueY).toBeGreaterThan(plan.subjectCorridor.bottom);
     expect(plan.caption.dialogueY).toBeLessThan(1920 - plan.safeZone.bottom);
     expect(() => assertCompositionSafe(plan)).not.toThrow();
+  });
+
+  it('preflight valida que la UI de TikTok no tape el layout', () => {
+    const words = Array.from({ length: 36 }, (_, index) => ({
+      word: index === 30 ? 'gratis' : `w${index}`,
+      start: index * 0.45,
+      end: index * 0.45 + 0.28,
+    }));
+    const plan = buildCompositionPlan(transcript(words), clip(), 'tiktok');
+    const report = buildLayoutPreflight(plan);
+
+    expect(report.status).toBe('PASS');
+    expect(report.platform).toBe('tiktok');
+    expect(report.checks).toHaveLength(5);
+    expect(report.checks.every((check) => check.passed)).toBe(true);
   });
 
   it('no llena un video visual con subtítulos permanentes', () => {
