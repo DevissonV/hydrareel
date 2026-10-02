@@ -115,6 +115,16 @@ export class ProcessJobUseCase {
       job.timings.totalDurationMs = Date.now() - started;
       job.transition('COMPLETED');
       await this.jobs.save(job);
+      await this.storage.putJson(`clients/${job.clientId}/jobs/${job.id}.json`, {
+        id: job.id,
+        clientId: job.clientId,
+        originalFileName: job.originalFileName,
+        sourceKey: job.sourceKey,
+        sourceDuration: job.sourceDuration,
+        createdAt: job.createdAt.toISOString(),
+        completedAt: job.updatedAt.toISOString(),
+        clips: job.clips,
+      });
       jobLog(job.id, 'job_completed', {
         sourceDuration: job.sourceDuration,
         ...job.timings,
