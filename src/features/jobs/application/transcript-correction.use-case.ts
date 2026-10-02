@@ -3,6 +3,7 @@ import { OBJECT_STORAGE, ObjectStoragePort } from '../../storage/application/obj
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
 import { Transcript, TranscriptSegment, TranscriptWord } from '../../transcription/domain/transcript';
 import { RegenerateClipUseCase } from './regenerate-clip.use-case';
+import { normalizeProjectMetrics } from '../domain/project-metrics';
 
 interface StoredTranscript extends Omit<Transcript, 'model' | 'usage'> {
   jobId?: string;
@@ -264,6 +265,19 @@ export class TranscriptCorrectionUseCase {
     };
     await this.storage.putJson(key, updated);
 
+    const wordsChanged = replacements.length + Math.abs(correctedClipWords.length - originalClipWords.length);
+    const manifestKey = `clients/${job.clientId}/jobs/${job.id}.json`;
+    try {
+      const manifest = await this.storage.getJson<any>(manifestKey);
+      const metrics = normalizeProjectMetrics(manifest.metrics);
+      metrics.transcriptCorrectionSaves += 1;
+      metrics.transcriptWordsCorrected += wordsChanged;
+      manifest.metrics = metrics;
+      await this.storage.putJson(manifestKey, manifest);
+    } catch {
+      // Metrics must never block a correction.
+    }
+
     setImmediate(() => {
       void this.regenerate
         .refreshFromCorrectedTranscript(job.clientId, job.id, replacements, [clipIndex])
@@ -319,6 +333,19 @@ export class TranscriptCorrectionUseCase {
       correctionCount: (transcript.correctionCount ?? 0) + 1,
     };
     await this.storage.putJson(key, updated);
+
+    const wordsChanged = replacements.length + Math.abs(correctedWords.length - (transcript.words ?? []).length);
+    const manifestKey = `clients/${job.clientId}/jobs/${job.id}.json`;
+    try {
+      const manifest = await this.storage.getJson<any>(manifestKey);
+      const metrics = normalizeProjectMetrics(manifest.metrics);
+      metrics.transcriptCorrectionSaves += 1;
+      metrics.transcriptWordsCorrected += wordsChanged;
+      manifest.metrics = metrics;
+      await this.storage.putJson(manifestKey, manifest);
+    } catch {
+      // Metrics must never block a correction.
+    }
 
     const clipsUpdating = job.clips.length;
     setImmediate(() => {
