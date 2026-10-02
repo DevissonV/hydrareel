@@ -62,9 +62,9 @@ const html = String.raw`<!doctype html>
     .clips{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:22px}.result-card{border-radius:25px;padding:13px;overflow:hidden}.video-shell{position:relative;border-radius:19px;overflow:hidden;background:#000;box-shadow:0 15px 45px #0008}.video-shell video{display:block;width:100%;aspect-ratio:9/16;background:#000}.badge{position:absolute;top:12px;padding:7px 9px;border-radius:10px;background:#090c14bb;border:1px solid #ffffff22;backdrop-filter:blur(8px);font-size:11px;font-weight:850;z-index:2}.badge.left{left:12px}.badge.right{right:12px}
     .details{padding:16px 7px 7px}.title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-width:0}.details h3{flex:1;min-width:0;font-size:18px;line-height:1.18;margin:0;letter-spacing:-.025em;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}.details h3.title-medium{font-size:16px;line-height:1.22}.details h3.title-long{font-size:14px;line-height:1.28}.score-badge{flex:none;border:1px solid #426aff44;background:#111a33;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800}.score-badge em{font-style:normal;color:var(--green)}
     .meta-row{display:flex;gap:7px;flex-wrap:wrap;margin:13px 0}.meta{border:1px solid #54617d3d;border-radius:999px;background:#0d1427;padding:7px 9px;color:#c5cde0;font-size:11px;font-weight:720}.why{border-top:1px solid var(--line);padding-top:13px}.why b{font-size:12px}.why p{color:#929db5;font-size:13px;line-height:1.5;margin:7px 0 14px}.download{text-decoration:none;display:block;text-align:center}.publish-pack{margin:12px 0;border:1px solid #6e62ff35;background:linear-gradient(150deg,#111a33,#0b1020);border-radius:15px;padding:12px}.pack-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.pack-label{font-size:10px;font-weight:950;letter-spacing:.08em;color:#bca8ff}.copy-pack{border:1px solid #7784b83b;background:#17203a;color:#e9edfb;border-radius:9px;padding:6px 8px;font-size:10px;font-weight:850;cursor:pointer}.hook-line{font-size:13px;font-weight:900;line-height:1.35;margin-top:9px;color:#f1f3ff}.caption-copy{font-size:11px;line-height:1.45;color:#96a2bb;margin-top:7px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.hashtags{font-size:10px;color:#7ea7ff;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.clip-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:10px 0}.clip-action{border:1px solid #5d6b9442;background:#0c1427;color:#dfe5f7;border-radius:11px;padding:9px 7px;font-size:10px;font-weight:900;cursor:pointer}.clip-action:hover{background:#131e39}.clip-action:disabled{opacity:.45;cursor:wait}
-    .secondary{margin-top:9px;width:100%;background:#0c1426;border:1px solid #5361814d;color:#e7eaf5;border-radius:15px;padding:14px;font-weight:800;cursor:pointer}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions .secondary{width:auto;margin-top:0;padding-inline:14px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:50;background:#02050ccd;backdrop-filter:blur(12px);display:grid;place-items:center;padding:18px}.modal-card{width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column;background:linear-gradient(155deg,#141c33,#090f1e);border:1px solid #7c89bd35;border-radius:24px;box-shadow:0 30px 100px #000a;padding:18px}.modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.modal-head h3{margin:0;font-size:20px}.modal-head p{margin:5px 0 0;color:#8996b1;font-size:12px}.modal-close{border:0;background:#172038;color:#dfe6f8;width:34px;height:34px;border-radius:10px;font-size:18px;cursor:pointer}.transcript-area{width:100%;min-height:46vh;max-height:58vh;resize:vertical;margin-top:14px;border:1px solid #64729d45;border-radius:15px;background:#080e1b;color:#f1f4ff;padding:14px;font:inherit;font-size:15px;line-height:1.65;outline:none}.transcript-area:focus{border-color:#8069ff88;box-shadow:0 0 0 3px #6a54ff18}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.modal-actions .secondary,.modal-actions .primary{width:auto;margin:0;padding:12px 16px}.transcript-status{min-height:18px;margin-top:8px;color:#8fa0bd;font-size:11px}
+    .secondary{margin-top:9px;width:100%;background:#0c1426;border:1px solid #5361814d;color:#e7eaf5;border-radius:15px;padding:14px;font-weight:800;cursor:pointer}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions .secondary{width:auto;margin-top:0;padding-inline:14px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:50;background:#02050ccd;backdrop-filter:blur(12px);display:grid;place-items:center;padding:18px}.modal-card{width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column;background:linear-gradient(155deg,#141c33,#090f1e);border:1px solid #7c89bd35;border-radius:24px;box-shadow:0 30px 100px #000a;padding:18px}.modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.modal-head h3{margin:0;font-size:20px}.modal-head p{margin:5px 0 0;color:#8996b1;font-size:12px}.modal-close{border:0;background:#172038;color:#dfe6f8;width:34px;height:34px;border-radius:10px;font-size:18px;cursor:pointer}.transcript-video{width:100%;max-height:300px;aspect-ratio:9/16;object-fit:contain;background:#03050a;border:1px solid #6978ac35;border-radius:16px;margin-top:14px}.transcript-help{margin-top:10px;color:#8794af;font-size:11px;line-height:1.5}.transcript-help b{color:#cbd5ee}.transcript-area{width:100%;min-height:28vh;max-height:42vh;resize:vertical;margin-top:10px;border:1px solid #64729d45;border-radius:15px;background:#080e1b;color:#f1f4ff;padding:14px;font:inherit;font-size:15px;line-height:1.65;outline:none}.transcript-area:focus{border-color:#8069ff88;box-shadow:0 0 0 3px #6a54ff18}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.modal-actions .secondary,.modal-actions .primary{width:auto;margin:0;padding:12px 16px}.transcript-status{min-height:18px;margin-top:8px;color:#8fa0bd;font-size:11px}
     .error{margin:18px auto 0;max-width:720px;background:#35151f;border:1px solid #ff6d8a42;color:#ffa9b9;border-radius:16px;padding:13px 15px;white-space:pre-wrap}.footer{text-align:center;color:#626e88;font-size:12px;margin-top:48px}
-    @media(max-width:820px){.app{padding:16px 14px 54px}.topbar{padding-bottom:15px}.status-pill{display:none}.hero{grid-template-columns:1fr;min-height:auto;gap:18px}.hero-copy{padding-top:8px}h1{font-size:clamp(42px,12vw,60px);margin-bottom:16px}.lead{font-size:16px}.upload-card{display:flex;flex-direction:column;padding:15px}.file-trigger{order:1;margin-top:0}.magic-strip{order:2}.visual{order:3;height:145px;margin-top:12px}.helper{order:4}.play-glass{width:76px;height:76px;border-radius:22px}.play-glass:after{border-top-width:14px;border-bottom-width:14px;border-left-width:22px}.chips{margin:18px 0 4px}.result-head{align-items:flex-start;flex-direction:column}.result-head h2{font-size:30px}.library-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.project-card{padding:8px;border-radius:16px}.project-preview{border-radius:12px;aspect-ratio:9/11}.project-name{font-size:12px}.project-meta{font-size:9px}.project-actions{grid-template-columns:1fr 34px;gap:6px}.view-project{padding:8px 6px;font-size:10px}.nav-btn{padding:8px 10px;font-size:12px}.brand{font-size:17px;gap:9px}.logo{width:30px;height:30px}.library .result-head{margin-bottom:14px}.result-actions{width:100%}.result-actions .secondary{flex:1}.modal{padding:10px}.modal-card{border-radius:18px;padding:14px}.transcript-area{min-height:56vh;font-size:16px}.modal-actions{display:grid;grid-template-columns:1fr 1fr}.modal-actions .secondary,.modal-actions .primary{width:100%}}
+    @media(max-width:820px){.app{padding:16px 14px 54px}.topbar{padding-bottom:15px}.status-pill{display:none}.hero{grid-template-columns:1fr;min-height:auto;gap:18px}.hero-copy{padding-top:8px}h1{font-size:clamp(42px,12vw,60px);margin-bottom:16px}.lead{font-size:16px}.upload-card{display:flex;flex-direction:column;padding:15px}.file-trigger{order:1;margin-top:0}.magic-strip{order:2}.visual{order:3;height:145px;margin-top:12px}.helper{order:4}.play-glass{width:76px;height:76px;border-radius:22px}.play-glass:after{border-top-width:14px;border-bottom-width:14px;border-left-width:22px}.chips{margin:18px 0 4px}.result-head{align-items:flex-start;flex-direction:column}.result-head h2{font-size:30px}.library-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.project-card{padding:8px;border-radius:16px}.project-preview{border-radius:12px;aspect-ratio:9/11}.project-name{font-size:12px}.project-meta{font-size:9px}.project-actions{grid-template-columns:1fr 34px;gap:6px}.view-project{padding:8px 6px;font-size:10px}.nav-btn{padding:8px 10px;font-size:12px}.brand{font-size:17px;gap:9px}.logo{width:30px;height:30px}.library .result-head{margin-bottom:14px}.result-actions{width:100%}.result-actions .secondary{flex:1}.modal{padding:10px}.modal-card{border-radius:18px;padding:14px}.transcript-video{max-height:260px}.transcript-area{min-height:30vh;font-size:16px}.modal-actions{display:grid;grid-template-columns:1fr 1fr}.modal-actions .secondary,.modal-actions .primary{width:100%}}
   </style>
 </head>
 <body>
@@ -115,7 +115,7 @@ const html = String.raw`<!doctype html>
     </section>
 
     <section id="results" hidden class="results">
-      <div class="result-head"><div><span class="eyebrow">✦ LISTO PARA PUBLICAR</span><h2 style="margin-top:12px">Tu contenido está listo</h2><p id="resultCopy">Hydra terminó la edición.</p></div><div class="result-actions"><button id="transcriptBtn" class="secondary">✎ Corregir transcripción</button><button id="again" class="secondary">↻ Crear otro</button></div></div>
+      <div class="result-head"><div><span class="eyebrow">✦ LISTO PARA PUBLICAR</span><h2 style="margin-top:12px">Tu contenido está listo</h2><p id="resultCopy">Hydra terminó la edición.</p></div><div class="result-actions"><button id="again" class="secondary">↻ Crear otro</button></div></div>
       <div id="resultSummary" class="result-summary"></div>
       <div id="clips" class="clips"></div>
     </section>
@@ -128,14 +128,16 @@ const html = String.raw`<!doctype html>
     <div id="transcriptModal" class="modal" hidden>
       <div class="modal-card">
         <div class="modal-head">
-          <div><h3>Corregir transcripción</h3><p>Edita el texto que Hydra entendió. Los tiempos se conservan por detrás.</p></div>
+          <div><h3>Corregir texto del clip</h3><p id="transcriptClipLabel">Reproduce el clip y corrige todo lo que Hydra entendió mal.</p></div>
           <button id="transcriptClose" class="modal-close" aria-label="Cerrar">×</button>
         </div>
+        <video id="transcriptVideo" class="transcript-video" controls playsinline preload="metadata"></video>
+        <div class="transcript-help">Puedes reproducir y pausar mientras editas. <b>Hydra no renderiza mientras escribes.</b></div>
         <textarea id="transcriptArea" class="transcript-area" spellcheck="true"></textarea>
         <div id="transcriptStatus" class="transcript-status"></div>
         <div class="modal-actions">
           <button id="transcriptCancel" class="secondary">Cancelar</button>
-          <button id="transcriptSave" class="primary">Guardar correcciones</button>
+          <button id="transcriptSave" class="primary">Guardar y actualizar clip</button>
         </div>
       </div>
     </div>
@@ -145,7 +147,7 @@ const html = String.raw`<!doctype html>
   </main>
 
 <script>
-const input=document.getElementById('file'),pick=document.getElementById('pick'),home=document.getElementById('home'),processing=document.getElementById('processing'),results=document.getElementById('results'),library=document.getElementById('library'),libraryGrid=document.getElementById('libraryGrid'),clips=document.getElementById('clips'),err=document.getElementById('error'),ring=document.getElementById('ring'),percent=document.getElementById('percent'),filenameEl=document.getElementById('filename'),uploadMeta=document.getElementById('uploadMeta'),resultCopy=document.getElementById('resultCopy'),resultSummary=document.getElementById('resultSummary'),again=document.getElementById('again'),transcriptBtn=document.getElementById('transcriptBtn'),transcriptModal=document.getElementById('transcriptModal'),transcriptArea=document.getElementById('transcriptArea'),transcriptStatus=document.getElementById('transcriptStatus'),transcriptSave=document.getElementById('transcriptSave'),transcriptCancel=document.getElementById('transcriptCancel'),transcriptClose=document.getElementById('transcriptClose'),navCreate=document.getElementById('navCreate'),navLibrary=document.getElementById('navLibrary');
+const input=document.getElementById('file'),pick=document.getElementById('pick'),home=document.getElementById('home'),processing=document.getElementById('processing'),results=document.getElementById('results'),library=document.getElementById('library'),libraryGrid=document.getElementById('libraryGrid'),clips=document.getElementById('clips'),err=document.getElementById('error'),ring=document.getElementById('ring'),percent=document.getElementById('percent'),filenameEl=document.getElementById('filename'),uploadMeta=document.getElementById('uploadMeta'),resultCopy=document.getElementById('resultCopy'),resultSummary=document.getElementById('resultSummary'),again=document.getElementById('again'),transcriptModal=document.getElementById('transcriptModal'),transcriptVideo=document.getElementById('transcriptVideo'),transcriptClipLabel=document.getElementById('transcriptClipLabel'),transcriptArea=document.getElementById('transcriptArea'),transcriptStatus=document.getElementById('transcriptStatus'),transcriptSave=document.getElementById('transcriptSave'),transcriptCancel=document.getElementById('transcriptCancel'),transcriptClose=document.getElementById('transcriptClose'),navCreate=document.getElementById('navCreate'),navLibrary=document.getElementById('navLibrary');
 let pickerOpenedAt=0;
 let pickerDeliveredFile=false;
 let wakeLock=null;
@@ -174,13 +176,84 @@ function packText(c){const tags=(c.hashtags||[]).join(' ');return [c.socialCapti
 async function copyPack(c,button){try{await navigator.clipboard.writeText(packText(c));const old=button.textContent;button.textContent='✓ Copiado';setTimeout(()=>button.textContent=old,1200)}catch{alert('No pudimos copiar el texto.')}}
 async function libraryProject(jobId){try{const r=await fetch('/api/library',{headers:{'x-hydra-client-id':clientId()}});if(!r.ok)return null;const projects=await r.json();return projects.find(p=>p.id===jobId)||null}catch{return null}}
 async function waitForClipChanges(jobId,oldKeys,expected,timeoutMs=180000){const started=Date.now();while(Date.now()-started<timeoutMs){await new Promise(r=>setTimeout(r,3000));const p=await libraryProject(jobId);if(!p)continue;const changed=(p.clips||[]).filter(clip=>oldKeys[String(clip.index)]&&oldKeys[String(clip.index)]!==clip.key).length;if(changed>=expected){if(currentSection==='library')await loadLibrary();else if(currentSection==='results')openLibraryProject(p);return true}}return false}
-async function openTranscriptEditor(){if(!activeResult?.id)return;transcriptStatus.textContent='Cargando…';transcriptArea.value='';transcriptModal.hidden=false;try{const r=await fetch('/api/library/'+activeResult.id+'/transcript',{headers:{'x-hydra-client-id':clientId()}});if(!r.ok)throw new Error('No pudimos cargar la transcripción.');const data=await r.json();transcriptArea.value=data.text||'';transcriptStatus.textContent=data.correctionCount?'Última versión corregida · '+data.correctionCount+' cambio'+(data.correctionCount===1?'':'s'):'Edita solo lo que Hydra entendió mal.';setTimeout(()=>transcriptArea.focus(),50)}catch(e){transcriptStatus.textContent=friendlyError(e.message||e)}}
-function closeTranscriptEditor(){transcriptModal.hidden=true;transcriptStatus.textContent=''}
-async function saveTranscript(){if(!activeResult?.id)return;const text=transcriptArea.value.trim();if(!text){transcriptStatus.textContent='La transcripción no puede quedar vacía.';return}const old=transcriptSave.textContent;const jobId=activeResult.id;const oldKeys={};for(const clip of activeResult.clips||[])oldKeys[String(clip.index)]=clip.key;transcriptSave.disabled=true;transcriptSave.textContent='Guardando…';try{const r=await fetch('/api/library/'+jobId+'/transcript',{method:'PUT',headers:{'Content-Type':'application/json','x-hydra-client-id':clientId()},body:JSON.stringify({text})});if(!r.ok){let message='No pudimos guardar la corrección.';try{const body=await r.json();if(body.message)message=body.message}catch{}throw new Error(message)}const data=await r.json();const count=Number(data.clipsUpdating||0);transcriptStatus.textContent=count?'✓ Guardado. Actualizando '+count+' '+(count===1?'clip':'clips')+' en el servidor…':'✓ Guardado.';transcriptSave.textContent='✓ Guardado';setTimeout(closeTranscriptEditor,900);if(count){resultCopy.textContent='Hydra está actualizando los videos con tu transcripción corregida…';void waitForClipChanges(jobId,oldKeys,count)}}catch(e){transcriptStatus.textContent=friendlyError(e.message||e);transcriptSave.textContent=old}finally{transcriptSave.disabled=false;setTimeout(()=>{transcriptSave.textContent=old},1100)}}
-transcriptBtn.onclick=()=>void openTranscriptEditor();
-transcriptCancel.onclick=closeTranscriptEditor;
-transcriptClose.onclick=closeTranscriptEditor;
-transcriptSave.onclick=()=>void saveTranscript();
+let transcriptContext=null;
+let transcriptDirty=false;
+let transcriptInitial='';
+async function openClipTranscriptEditor(jobId,clip){
+  transcriptContext={jobId,clip};
+  transcriptDirty=false;
+  transcriptInitial='';
+  transcriptArea.value='';
+  transcriptStatus.textContent='Cargando texto…';
+  transcriptClipLabel.textContent='Clip '+clip.index+' · '+Math.round(clip.durationSeconds)+'s';
+  transcriptVideo.src=clip.url;
+  transcriptModal.hidden=false;
+  try{
+    const r=await fetch('/api/library/'+jobId+'/clips/'+clip.index+'/transcript',{headers:{'x-hydra-client-id':clientId()}});
+    if(!r.ok)throw new Error('No pudimos cargar el texto de este clip.');
+    const data=await r.json();
+    transcriptInitial=data.text||'';
+    transcriptArea.value=transcriptInitial;
+    transcriptStatus.textContent='Escucha y corrige todo lo necesario. Se renderiza una sola vez al guardar.';
+  }catch(e){
+    transcriptStatus.textContent=friendlyError(e.message||e);
+  }
+}
+function closeTranscriptEditor(force=false){
+  if(transcriptDirty&&!force&&!confirm('¿Descartar las correcciones que aún no guardaste?'))return;
+  try{transcriptVideo.pause()}catch{}
+  transcriptVideo.removeAttribute('src');
+  transcriptVideo.load();
+  transcriptModal.hidden=true;
+  transcriptStatus.textContent='';
+  transcriptContext=null;
+  transcriptDirty=false;
+  transcriptInitial='';
+}
+transcriptArea.addEventListener('input',()=>{
+  transcriptDirty=transcriptArea.value.trim()!==transcriptInitial.trim();
+  transcriptStatus.textContent=transcriptDirty?'Cambios pendientes · se aplicarán juntos al guardar.':'Sin cambios pendientes.';
+});
+async function saveClipTranscript(){
+  if(!transcriptContext)return;
+  const text=transcriptArea.value.trim();
+  if(!text){transcriptStatus.textContent='El texto del clip no puede quedar vacío.';return}
+  const {jobId,clip}=transcriptContext;
+  if(!transcriptDirty){closeTranscriptEditor(true);return}
+  const oldKey=clip.key;
+  const old=transcriptSave.textContent;
+  transcriptSave.disabled=true;
+  transcriptSave.textContent='Guardando…';
+  try{
+    const r=await fetch('/api/library/'+jobId+'/clips/'+clip.index+'/transcript',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','x-hydra-client-id':clientId()},
+      body:JSON.stringify({text})
+    });
+    if(!r.ok){
+      let message='No pudimos guardar la corrección.';
+      try{const body=await r.json();if(body.message)message=body.message}catch{}
+      throw new Error(message);
+    }
+    const data=await r.json();
+    transcriptDirty=false;
+    transcriptInitial=text;
+    transcriptStatus.textContent=data.updatingVideo?'✓ Guardado. Actualizando el video en el servidor…':'✓ Guardado.';
+    transcriptSave.textContent='✓ Guardado';
+    resultCopy.textContent=data.updatingVideo?'Hydra está actualizando el clip '+clip.index+' con tus correcciones…':resultCopy.textContent;
+    setTimeout(()=>closeTranscriptEditor(true),700);
+    if(data.updatingVideo)void waitForClipChanges(jobId,{[String(clip.index)]:oldKey},1);
+  }catch(e){
+    transcriptStatus.textContent=friendlyError(e.message||e);
+    transcriptSave.textContent=old;
+  }finally{
+    transcriptSave.disabled=false;
+    setTimeout(()=>{transcriptSave.textContent=old},1000);
+  }
+}
+transcriptCancel.onclick=()=>closeTranscriptEditor();
+transcriptClose.onclick=()=>closeTranscriptEditor();
+transcriptSave.onclick=()=>void saveClipTranscript();
 transcriptModal.addEventListener('click',e=>{if(e.target===transcriptModal)closeTranscriptEditor()});
 async function regenerateClip(jobId,c,mode,button){if(!jobId){alert('Este clip aún no está disponible para ajustar.');return}const old=button.textContent;const oldKey=c.key;button.disabled=true;button.textContent='Ajustando…';try{const r=await fetch('/api/library/'+jobId+'/clips/'+c.index+'/regenerate',{method:'POST',headers:{'Content-Type':'application/json','x-hydra-client-id':clientId()},body:JSON.stringify({mode})});if(!r.ok){let message='No pudimos ajustar este clip.';try{const body=await r.json();if(body.message)message=body.message}catch{}throw new Error(message)}const updated=await r.json();if(activeResult){const idx=activeResult.clips.findIndex(x=>x.index===c.index);if(idx>=0)activeResult.clips[idx]=updated;render(activeResult)}}catch(e){button.textContent='Terminando en servidor…';const recovered=await waitForClipChanges(jobId,{[String(c.index)]:oldKey},1,90000);if(!recovered)alert(friendlyError(e.message||e))}finally{button.disabled=false;button.textContent=old}}
 function addClip(c,total,jobId){const card=document.createElement('article');card.className='result-card';const shell=document.createElement('div');shell.className='video-shell';const video=document.createElement('video');video.controls=true;video.preload='metadata';video.src=c.url;const left=document.createElement('span');left.className='badge left';left.textContent='#'+c.index+' de '+total;const right=document.createElement('span');right.className='badge right';right.textContent=Math.round(c.durationSeconds)+'s';shell.append(video,left,right);
@@ -189,10 +262,11 @@ const meta=document.createElement('div');meta.className='meta-row';['◷ '+Math.
 const me=c.magicEdit||{};const magic=document.createElement('div');magic.className='magic-summary';const ms=document.createElement('strong');ms.textContent='✦ Edición aplicada automáticamente';const mv=document.createElement('span');const facts=[];if((me.silenceCuts||0)>0)facts.push(me.silenceCuts+' pausas ajustadas'+((me.removedSeconds||0)>.2?' · '+Number(me.removedSeconds).toFixed(1)+'s eliminados':''));if((me.punchIns||0)>0)facts.push(me.punchIns+' énfasis de cámara');if((c.emphasisTerms||[]).length)facts.push((c.emphasisTerms||[]).length+' conceptos destacados');facts.push('voz + color optimizados');mv.textContent=facts.join(' · ');magic.append(ms,mv);
 const pack=document.createElement('div');pack.className='publish-pack';const packTop=document.createElement('div');packTop.className='pack-top';const packLabel=document.createElement('span');packLabel.className='pack-label';packLabel.textContent='PUBLICACIÓN PREPARADA';const copy=document.createElement('button');copy.className='copy-pack';copy.textContent='Copiar publicación';copy.onclick=()=>copyPack(c,copy);packTop.append(packLabel,copy);const hook=document.createElement('div');hook.className='hook-line';hook.textContent='“'+(c.hook||c.title)+'”';const caption=document.createElement('div');caption.className='caption-copy';caption.textContent=c.socialCaption||c.reason;const tags=document.createElement('div');tags.className='hashtags';tags.textContent=(c.hashtags||[]).join(' ');pack.append(packTop,hook,caption,tags);
 const download=document.createElement('a');download.className='primary download';download.href=c.url;download.download='hydrareel-clip-'+String(c.index).padStart(2,'0')+'.mp4';download.textContent='↓ Descargar clip listo';
+const correct=document.createElement('button');correct.className='secondary';correct.textContent='✎ Corregir texto';correct.onclick=()=>void openClipTranscriptEditor(jobId,c);
 const refine=document.createElement('details');refine.className='refine';const summary=document.createElement('summary');summary.textContent='Quiero ajustar este clip';const actions=document.createElement('div');actions.className='clip-actions';[['Más corto','shorter'],['Más largo','longer'],['Otro momento','alternative'],['Cambiar estilo','restyle']].forEach(([label,mode])=>{const b=document.createElement('button');b.className='clip-action';b.textContent=label;b.onclick=()=>regenerateClip(jobId,c,mode,b);actions.appendChild(b)});refine.append(summary,actions);
 const editorial=document.createElement('details');editorial.className='editorial-note';const es=document.createElement('summary');es.textContent='Por qué Hydra eligió este momento';const ep=document.createElement('p');ep.textContent=c.reason;editorial.append(es,ep);
-details.append(titleRow,meta,magic,pack,download);if(!activeResult?.status||activeResult.status==='COMPLETED')details.append(refine);details.append(editorial);card.append(shell,details);clips.appendChild(card)}
-function render(job){activeResult={...job,clips:[...(job.clips||[])]};transcriptBtn.hidden=!activeResult.id;clips.innerHTML='';resultSummary.innerHTML='';const list=activeResult.clips;const ready=totalClipSeconds(list);resultCopy.textContent=(activeResult.sourceDuration?mediaTime(activeResult.sourceDuration)+' original → ':'')+list.length+' '+(list.length===1?'clip':'clips')+' → '+mediaTime(ready)+' listos';const summaryItems=[];if(activeResult.sourceDuration)summaryItems.push(['Original',mediaTime(activeResult.sourceDuration)]);summaryItems.push(['Clips',String(list.length)]);if(ready>0)summaryItems.push(['Contenido listo',mediaTime(ready)]);if(activeResult.timings?.totalDurationMs)summaryItems.push(['Procesado en',mediaTime(activeResult.timings.totalDurationMs/1000)]);for(const [label,value] of summaryItems){const pill=document.createElement('span');pill.className='summary-pill';pill.innerHTML=label+' <strong>'+value+'</strong>';resultSummary.appendChild(pill)}list.forEach(c=>addClip(c,list.length,activeResult.id));show('results')}
+details.append(titleRow,meta,magic,pack,download,correct);if(!activeResult?.status||activeResult.status==='COMPLETED')details.append(refine);details.append(editorial);card.append(shell,details);clips.appendChild(card)}
+function render(job){activeResult={...job,clips:[...(job.clips||[])]};clips.innerHTML='';resultSummary.innerHTML='';const list=activeResult.clips;const ready=totalClipSeconds(list);resultCopy.textContent=(activeResult.sourceDuration?mediaTime(activeResult.sourceDuration)+' original → ':'')+list.length+' '+(list.length===1?'clip':'clips')+' → '+mediaTime(ready)+' listos';const summaryItems=[];if(activeResult.sourceDuration)summaryItems.push(['Original',mediaTime(activeResult.sourceDuration)]);summaryItems.push(['Clips',String(list.length)]);if(ready>0)summaryItems.push(['Contenido listo',mediaTime(ready)]);if(activeResult.timings?.totalDurationMs)summaryItems.push(['Procesado en',mediaTime(activeResult.timings.totalDurationMs/1000)]);for(const [label,value] of summaryItems){const pill=document.createElement('span');pill.className='summary-pill';pill.innerHTML=label+' <strong>'+value+'</strong>';resultSummary.appendChild(pill)}list.forEach(c=>addClip(c,list.length,activeResult.id));show('results')}
 async function poll(id){for(;;){await new Promise(r=>setTimeout(r,2200));let r;try{r=await fetch('/api/jobs/'+id)}catch{continue}if(!r.ok){if(r.status===404){localStorage.removeItem(JOB_KEY);if(currentSection!=='library')fail('El procesamiento anterior ya no está disponible.');return}continue}const j=await r.json();setProgress(j.status);uploadMeta.textContent=j.status==='TRANSCRIBING'?'Entendiendo todo lo que se dice… · puedes salir de esta pantalla':j.status==='ANALYZING'?'Eligiendo momentos que funcionan por sí solos… · puedes salir de esta pantalla':j.status==='RENDERING'?'Aplicando Magic Edit… · puedes salir de esta pantalla':j.status;if(j.status==='FAILED'){localStorage.removeItem(JOB_KEY);await releaseScreen();setPickerBusy(false);if(currentSection==='library'){await loadLibrary();return}fail(j.error||'No pudimos completar esta edición.');return}if(j.status==='COMPLETED'){localStorage.removeItem(JOB_KEY);await releaseScreen();setPickerBusy(false);activeResult=j;if(currentSection==='library'){await loadLibrary();return}render(j);return}}}
 async function handleSelectedFile(f){if(!f)return;pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);filenameEl.textContent=f.name;show('processing');setProgress('UPLOADING',3);void keepScreenAwake();const sizeMb=f.size/1048576;uploadMeta.textContent='Video recibido · '+sizeMb.toFixed(1)+' MB · preparando subida…';await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));try{const r=await fetch('/api/jobs/upload-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName:f.name,contentType:f.type||'application/octet-stream',clientId:clientId()})});if(!r.ok)throw new Error(await r.text());const u=await r.json();await uploadWithProgress(u.uploadUrl,u.headers,f);setProgress('UPLOADED',22);uploadMeta.textContent='Upload completo · iniciando procesamiento…';localStorage.setItem(JOB_KEY,u.jobId);const p=await fetch('/api/jobs/'+u.jobId+'/uploaded',{method:'POST'});if(!p.ok)throw new Error(await p.text());uploadMeta.textContent='Procesamiento iniciado en servidor · ya puedes salir de esta pantalla';await poll(u.jobId)}catch(e){fail(e.message||String(e))}}
 again.onclick=()=>{input.value='';pickerDeliveredFile=false;err.hidden=true;localStorage.removeItem(JOB_KEY);void releaseScreen();setPickerBusy(false);show('home')};
