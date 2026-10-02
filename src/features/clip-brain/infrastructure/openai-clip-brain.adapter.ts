@@ -96,13 +96,15 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
           type: 'array', minItems: 1, maxItems: policy.maxClips,
           items: {
             type: 'object', additionalProperties: false,
-            required: ['startSeconds', 'endSeconds', 'title', 'hook', 'reason', 'score'],
+            required: ['startSeconds', 'endSeconds', 'title', 'hook', 'reason', 'socialCaption', 'hashtags', 'score'],
             properties: {
               startSeconds: { type: 'number', minimum: 0 },
               endSeconds: { type: 'number', minimum: 0 },
-              title: { type: 'string' },
-              hook: { type: 'string' },
-              reason: { type: 'string' },
+              title: { type: 'string', maxLength: 80 },
+              hook: { type: 'string', maxLength: 140 },
+              reason: { type: 'string', maxLength: 220 },
+              socialCaption: { type: 'string', maxLength: 500 },
+              hashtags: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'string', maxLength: 40 } },
               score: { type: 'number', minimum: 0, maximum: 100 },
             },
           },
@@ -113,7 +115,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const { parsed, usage } = await this.structured(
       'hydrareel_clips',
       schema,
-      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. Mantén title <=80 caracteres, hook <=140 y reason <=220. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
+      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. Además del corte, empaqueta cada clip para publicación: title <=80 caracteres, hook <=140 caracteres que pueda mostrarse visualmente al inicio sin inventar hechos, socialCaption <=500 caracteres útil como copy para Reels/Shorts/TikTok y entre 1 y 5 hashtags específicos. Mantén reason <=220. No uses clickbait falso. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
       { duration: transcript.duration, policy, timeline },
     );
 
@@ -184,6 +186,8 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
         title: String(item.title || original.title),
         hook: original.hook,
         reason: String(item.reason || original.reason),
+        socialCaption: original.socialCaption,
+        hashtags: original.hashtags,
         score: Number(item.score ?? original.score),
       });
     }
