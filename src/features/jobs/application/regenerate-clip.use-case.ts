@@ -45,7 +45,7 @@ function nextStyle(current: CaptionStyle): CaptionStyle {
   return 'pulse';
 }
 
-function replaceWholeText(value: string, from: string, to: string): string {
+export function replaceWholeText(value: string, from: string, to: string): string {
   const needle = from.trim();
   const replacement = to.trim();
   if (!needle || !replacement) return value;
