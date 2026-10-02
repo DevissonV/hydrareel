@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { RENDERING_PORT, RenderingPort, CaptionStyle } from '../../rendering/app
 import { Transcript } from '../../transcription/domain/transcript';
 import { ClipCandidate } from '../../clip-brain/domain/clip-candidate';
 import { JobClip } from '../domain/job.entity';
+import { RenderGate } from './render-gate';
 
 type RegenerateMode = 'shorter' | 'longer' | 'alternative' | 'restyle';
 
@@ -50,6 +51,7 @@ export class RegenerateClipUseCase {
     @Inject(MEDIA_PORT) private readonly media: MediaPort,
     @Inject(CLIP_BRAIN_PORT) private readonly clipBrain: ClipBrainPort,
     @Inject(RENDERING_PORT) private readonly rendering: RenderingPort,
+    private readonly renderGate: RenderGate,
   ) {}
 
   async execute(
@@ -63,7 +65,11 @@ export class RegenerateClipUseCase {
     const clipIndex = Number.parseInt(rawClipIndex, 10);
     if (!Number.isInteger(clipIndex) || clipIndex < 1) throw new BadRequestException('clipIndex inválido');
     const mode = assertMode(body.mode);
-    if (this.busy) throw new BadRequestException('Ya hay una regeneración en curso');
+    if (this.busy) throw new ConflictException('Hydra ya está ajustando otro clip.');
+    const releaseRender = this.renderGate.tryAcquire(`regenerate:${jobId}:${clipIndex}`);
+    if (!releaseRender) {
+      throw new ConflictException('Hydra está terminando otra edición. Este ajuste estará disponible apenas termine.');
+    }
     this.busy = true;
 
     const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
@@ -183,6 +189,7 @@ export class RegenerateClipUseCase {
       };
     } finally {
       this.busy = false;
+      releaseRender();
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
