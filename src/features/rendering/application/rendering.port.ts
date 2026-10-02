@@ -31,7 +31,7 @@ export interface MagicEditPlan {
   outputDuration: number;
   audioPolished: boolean;
   colorPolished: boolean;
-  composition: CompositionPlan;
+  composition?: CompositionPlan;
 }
 
 export interface RenderOptions {
