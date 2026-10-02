@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -11,9 +11,10 @@ import { TRANSCRIPTION_PORT, TranscriptionPort } from '../../transcription/appli
 import { CLIP_BRAIN_PORT, ClipBrainPort } from '../../clip-brain/application/clip-brain.port';
 import { RENDERING_PORT, RenderingPort } from '../../rendering/application/rendering.port';
 import { validateMediaDuration } from './input-validation';
+import { RenderGate } from './render-gate';
 
 @Injectable()
-export class ProcessJobUseCase {
+export class ProcessJobUseCase implements OnModuleInit {
   private runningJobId?: string;
 
   constructor(
@@ -24,7 +25,33 @@ export class ProcessJobUseCase {
     @Inject(TRANSCRIPTION_PORT) private readonly transcription: TranscriptionPort,
     @Inject(CLIP_BRAIN_PORT) private readonly clipBrain: ClipBrainPort,
     @Inject(RENDERING_PORT) private readonly rendering: RenderingPort,
+    private readonly renderGate: RenderGate,
   ) {}
+
+  onModuleInit(): void {
+    setImmediate(() => void this.recoverPendingJobs());
+  }
+
+  private async recoverPendingJobs(): Promise<void> {
+    if (this.runningJobId) return;
+    const pending = (await this.jobs.listActive())
+      .filter((job) => job.status !== 'UPLOADING')
+      .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+
+    for (const job of pending) {
+      if (this.runningJobId) break;
+      jobLog(job.id, 'startup_recovery_started', { previousStatus: job.status });
+      job.recoverForRetry();
+      await this.storage.deletePrefix(`outputs/${job.id}/`).catch(() => 0);
+      await this.jobs.save(job);
+      this.runningJobId = job.id;
+      try {
+        await this.run(job.id);
+      } finally {
+        if (this.runningJobId === job.id) this.runningJobId = undefined;
+      }
+    }
+  }
 
   async markUploadedAndStart(jobId: string): Promise<void> {
     const job = await this.jobs.get(jobId);
@@ -84,6 +111,8 @@ export class ProcessJobUseCase {
       job.transition('RENDERING');
       await this.jobs.save(job);
       const r0 = Date.now();
+      const releaseRender = await this.renderGate.acquire(`job:${job.id}`);
+      try {
       for (const [index, clip] of reviewed.clips.slice(0, this.config.maxClipsPerJob).entries()) {
         const number = String(index + 1).padStart(2, '0');
         const subtitlesPath = path.join(dir, `clip-${number}.ass`);
@@ -148,6 +177,9 @@ export class ProcessJobUseCase {
           },
         });
       }
+      } finally {
+        releaseRender();
+      }
       job.timings.renderDurationMs = Date.now() - r0;
       job.timings.totalDurationMs = Date.now() - started;
       const completedAt = new Date().toISOString();
@@ -173,9 +205,11 @@ export class ProcessJobUseCase {
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : String(error);
       const publicMessage =
-        rawMessage.includes('"code"') || rawMessage.length > 500
-          ? 'No pudimos validar la selección editorial. Intenta de nuevo con el mismo video.'
-          : rawMessage;
+        /ffmpeg|exited null|SIGKILL|killed|ENOMEM|out of memory/i.test(rawMessage)
+          ? 'No pudimos terminar la edición de este video. El original quedó guardado para que puedas intentarlo de nuevo.'
+          : rawMessage.includes('"code"') || rawMessage.length > 500
+            ? 'No pudimos completar esta edición. Intenta de nuevo con el mismo video.'
+            : rawMessage;
       job.timings.totalDurationMs = Date.now() - started;
       job.fail(job.status, publicMessage);
       await this.jobs.save(job);
