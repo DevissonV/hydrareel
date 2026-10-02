@@ -306,12 +306,26 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
           ? `Crea una versión con más contexto del mismo momento, idealmente 20-35% más larga que ${originalDuration.toFixed(1)}s, sin superar ${policy.maxSeconds}s ni añadir relleno irrelevante.`
           : 'Busca un momento alternativo fuerte del video, diferente al original, que pueda funcionar mejor como short y que se entienda por sí solo.';
 
-    const { parsed, usage } = await this.structured(
-      'hydrareel_regenerated_clip',
-      schema,
-      `Eres un editor senior de video corto. ${instruction} Usa exclusivamente índices de segmentos reales. El inicio debe sentirse natural y el final debe cerrar completamente la frase o idea. Devuelve además packaging listo para publicar: título, hook visual fiel al contenido, socialCaption y 1-5 hashtags específicos. Devuelve también emphasisTerms con 0-6 términos realmente importantes para resaltar en subtítulos; no elijas palabras por ritmo ni posición. No inventes hechos ni uses clickbait falso.`,
-      { mode, duration: transcript.duration, original, policy, timeline },
-    );
+    let parsed: any;
+    let usage: unknown;
+    try {
+      const result = await this.structured(
+        'hydrareel_regenerated_clip',
+        schema,
+        `Eres un editor senior de video corto. ${instruction} Usa exclusivamente índices de segmentos reales. El inicio debe sentirse natural y el final debe cerrar completamente la frase o idea. Devuelve además packaging listo para publicar: título, hook visual fiel al contenido, socialCaption y 1-5 hashtags específicos. Devuelve también emphasisTerms con 0-6 términos realmente importantes para resaltar en subtítulos; no elijas palabras por ritmo ni posición. No inventes hechos ni uses clickbait falso.`,
+        { mode, duration: transcript.duration, original, policy, timeline },
+      );
+      parsed = result.parsed;
+      usage = result.usage;
+    } catch (error) {
+      if (mode === 'shorter') {
+        const fallbackMin = Math.max(8, Math.min(policy.minSeconds, originalDuration * 0.45));
+        const fallbackMax = Math.max(fallbackMin, Math.min(policy.maxSeconds, originalDuration * 0.9));
+        const fallback = deterministicShorter(transcript, original, fallbackMin, fallbackMax);
+        if (fallback) return { clip: fallback, usage: { fallback: 'deterministic_shorter' } };
+      }
+      throw error;
+    }
 
     const bounds = wordSafeBounds(transcript, parsed.startSegmentIndex, parsed.endSegmentIndex);
     if (!bounds) {
