@@ -9,16 +9,19 @@ import { CreateUploadUseCase } from './application/create-upload.use-case';
 import { ProcessJobUseCase } from './application/process-job.use-case';
 import { GetJobUseCase } from './application/get-job.use-case';
 import { JobsController } from './presentation/jobs.controller';
+import { LibraryController } from './presentation/library.controller';
+import { LibraryUseCase } from './application/library.use-case';
 
 @Module({
   imports: [StorageModule, MediaModule, TranscriptionModule, ClipBrainModule, RenderingModule],
-  controllers: [JobsController],
+  controllers: [JobsController, LibraryController],
   providers: [
     InMemoryJobRepository,
     { provide: JOB_REPOSITORY, useExisting: InMemoryJobRepository },
     CreateUploadUseCase,
     ProcessJobUseCase,
     GetJobUseCase,
+    LibraryUseCase,
   ],
 })
 export class JobsModule {}
