@@ -169,40 +169,69 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       },
     };
 
-    const { parsed, usage } = await this.structured(
-      'hydrareel_editorial_qa',
-      schema,
-      `Eres el control editorial final de HydraReel. Antes de renderizar, revisa cada candidato como si fueras un editor humano exigente. Un clip solo se aprueba si: (1) se entiende solo, (2) no empieza a mitad de una idea dependiente de contexto anterior, (3) no termina a mitad de una frase, pensamiento o payoff, y (4) tiene un cierre natural. Puedes mover el inicio y el final únicamente usando índices de segmentos reales de la transcripción. Ajusta a los límites naturales más cercanos aunque el clip quede más corto o largo, siempre dentro de ${policy.minSeconds}-${policy.maxSeconds}s. Si no puede quedar coherente, approved=false. Mantén title <=80 caracteres y reason <=220. Devuelve una entrada por cada candidato.`,
-      { duration: transcript.duration, policy, candidates: clips, timeline },
-    );
-
-    const reviewed: ClipCandidate[] = [];
-    for (const item of parsed.clips ?? []) {
-      const original = clips[item.candidateIndex];
-      const bounds = wordSafeBounds(transcript, item.startSegmentIndex, item.endSegmentIndex);
-      if (!original || !item.approved || !bounds) continue;
-      reviewed.push({
-        startSeconds: bounds.startSeconds,
-        endSeconds: bounds.endSeconds,
-        title: String(item.title || original.title),
-        hook: original.hook,
-        reason: String(item.reason || original.reason),
-        socialCaption: original.socialCaption,
-        hashtags: original.hashtags,
-        emphasisTerms: original.emphasisTerms,
-        score: Number(item.score ?? original.score),
-      });
+    let parsed: any;
+    let usage: unknown;
+    try {
+      const result = await this.structured(
+        'hydrareel_editorial_qa',
+        schema,
+        `Eres el control editorial final de HydraReel. Antes de renderizar, revisa cada candidato como si fueras un editor humano exigente. Un clip se aprueba cuando se entiende solo, empieza de forma natural, termina después de cerrar la frase/idea/payoff y puede mejorarse usando únicamente límites reales de segmentos. Puedes mover inicio y final dentro de ${policy.minSeconds}-${policy.maxSeconds}s. Si no puedes MEJORAR con seguridad un candidato, approved=false: Hydra conservará el corte original válido en vez de perderlo. Mantén title <=80 caracteres y reason <=220. Devuelve una entrada por cada candidato.`,
+        { duration: transcript.duration, policy, candidates: clips, timeline },
+      );
+      parsed = result.parsed;
+      usage = result.usage;
+    } catch {
+      return {
+        clips,
+        usage: { fallback: 'all_original_candidates', reason: 'editorial_qa_unavailable' },
+      };
     }
 
+    const reviewedByIndex = new Map<number, ClipCandidate>();
+    for (const item of parsed.clips ?? []) {
+      const original = clips[item.candidateIndex];
+      if (!original || !item.approved) continue;
+      const bounds = wordSafeBounds(transcript, item.startSegmentIndex, item.endSegmentIndex);
+      if (!bounds) continue;
+
+      const revised = validateAndNormalizeCandidates(
+        { clips: [{
+          startSeconds: bounds.startSeconds,
+          endSeconds: bounds.endSeconds,
+          title: String(item.title || original.title),
+          hook: original.hook,
+          reason: String(item.reason || original.reason),
+          socialCaption: original.socialCaption,
+          hashtags: original.hashtags,
+          emphasisTerms: original.emphasisTerms,
+          score: Number(item.score ?? original.score),
+        }] },
+        policy.minSeconds,
+        policy.maxSeconds,
+        transcript.duration,
+        1,
+      );
+
+      if (revised[0]) reviewedByIndex.set(item.candidateIndex, revised[0]);
+    }
+
+    const merged = clips.map((original, index) => reviewedByIndex.get(index) ?? original);
     const normalized = validateAndNormalizeCandidates(
-      { clips: reviewed },
+      { clips: merged },
       policy.minSeconds,
       policy.maxSeconds,
       transcript.duration,
       policy.maxClips,
     );
-    if (!normalized.length) throw new Error('La revisión editorial no encontró un corte completo y coherente');
-    return { clips: normalized, usage };
+
+    return {
+      clips: normalized.length ? normalized : clips,
+      usage: {
+        editorialReview: usage,
+        improved: reviewedByIndex.size,
+        preservedOriginals: Math.max(0, clips.length - reviewedByIndex.size),
+      },
+    };
   }
 
   async regenerate(
