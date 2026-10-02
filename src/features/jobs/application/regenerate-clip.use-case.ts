@@ -207,6 +207,13 @@ export class RegenerateClipUseCase {
       successMetrics.regenerationDurationMs += Date.now() - started;
       manifest.metrics = successMetrics;
       await this.storage.putJson(manifestKey, manifest);
+
+      const job = await this.jobs.get(jobId);
+      if (job && job.clientId === clientId) {
+        job.clips = job.clips.map((clip) => clip.index === clipIndex ? updated : clip);
+        await this.jobs.save(job);
+      }
+
       if (original.key !== key) await this.storage.deleteKeys([original.key]).catch(() => undefined);
 
       return {
