@@ -1,11 +1,16 @@
 import { z } from 'zod';
 
+const boundedText = (max: number) =>
+  z.string()
+    .transform((value) => value.trim().slice(0, max))
+    .refine((value) => value.length > 0, 'Texto vacío');
+
 export const clipCandidateSchema = z.object({
   startSeconds: z.number().nonnegative(),
   endSeconds: z.number().positive(),
-  title: z.string().min(1).max(120),
-  hook: z.string().min(1).max(240),
-  reason: z.string().min(1).max(300),
+  title: boundedText(120),
+  hook: boundedText(240),
+  reason: boundedText(300),
   score: z.number().min(0).max(100),
 });
 
