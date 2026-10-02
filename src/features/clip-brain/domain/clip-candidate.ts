@@ -20,6 +20,34 @@ export const clipCandidateSchema = z.object({
 export const clipSelectionSchema = z.object({ clips: z.array(clipCandidateSchema) });
 export type ClipCandidate = z.infer<typeof clipCandidateSchema>;
 
+function cleanHashtag(value: string): string {
+  const cleaned = value.trim().replace(/\s+/g, '').replace(/^#+/, '');
+  return cleaned ? `#${cleaned.slice(0, 39)}` : '';
+}
+
+export function normalizeHashtags(values: string[]): string[] {
+  const required = ['#viral', '#fyp'];
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  const push = (value: string) => {
+    const tag = cleanHashtag(value);
+    const key = tag.toLowerCase();
+    if (!tag || seen.has(key)) return;
+    seen.add(key);
+    result.push(tag);
+  };
+
+  for (const tag of required) push(tag);
+  for (const tag of values) push(tag);
+  for (const fallback of ['#reels', '#shorts', '#contenido']) {
+    if (result.length >= 5) break;
+    push(fallback);
+  }
+
+  return result.slice(0, 5);
+}
+
 export interface ClipPolicy {
   minSeconds: number;
   maxSeconds: number;
@@ -88,7 +116,12 @@ export function validateAndNormalizeCandidates(
     if (duration < minSeconds || duration > maxSeconds) continue;
     const overlaps = accepted.some((x) => Math.max(start, x.startSeconds) < Math.min(end, x.endSeconds));
     if (overlaps) continue;
-    accepted.push({ ...candidate, startSeconds: start, endSeconds: end });
+    accepted.push({
+      ...candidate,
+      startSeconds: start,
+      endSeconds: end,
+      hashtags: normalizeHashtags(candidate.hashtags),
+    });
     if (accepted.length >= maxClips) break;
   }
   return accepted.sort((a, b) => a.startSeconds - b.startSeconds);
