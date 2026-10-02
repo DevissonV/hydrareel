@@ -104,6 +104,7 @@ export class RegenerateClipUseCase {
         reason: original.reason,
         socialCaption: original.socialCaption ?? original.reason,
         hashtags: original.hashtags?.length ? original.hashtags : ['#HydraReel'],
+        emphasisTerms: original.emphasisTerms ?? [],
         score: original.score,
       };
 
@@ -120,17 +121,19 @@ export class RegenerateClipUseCase {
             : original.captionStyle ?? 'pulse';
 
       const framing = sourceMeta.width / sourceMeta.height > 0.82 ? 'subject-safe' as const : 'fill' as const;
+      const plan = this.rendering.createPlan(transcript, generated.clip);
       const captionCueCount = await this.rendering.writeSubtitles(
         subtitlesPath,
         transcript,
         generated.clip,
-        { hook: generated.clip.hook, captionStyle },
+        { hook: generated.clip.hook, captionStyle, plan },
       );
       await this.rendering.render(sourcePath, outputPath, subtitlesPath, generated.clip, {
         sourceWidth: sourceMeta.width,
         sourceHeight: sourceMeta.height,
         hook: generated.clip.hook,
         captionStyle,
+        plan,
       });
 
       const outputMeta = await this.media.probe(outputPath);
@@ -145,6 +148,14 @@ export class RegenerateClipUseCase {
         hook: generated.clip.hook,
         socialCaption: generated.clip.socialCaption,
         hashtags: generated.clip.hashtags,
+        emphasisTerms: generated.clip.emphasisTerms,
+        magicEdit: {
+          silenceCuts: plan.silenceCuts,
+          removedSeconds: plan.removedSeconds,
+          punchIns: plan.punchIns.length,
+          audioPolished: plan.audioPolished,
+          colorPolished: plan.colorPolished,
+        },
         captionStyle,
         framing,
         durationSeconds: outputMeta.durationSeconds,
