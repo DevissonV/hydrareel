@@ -88,12 +88,16 @@ function escapeSubtitlePath(path: string): string {
 
 export function buildRenderArgs(source: string, destination: string, subtitlesPath: string, clip: ClipCandidate): string[] {
   const duration = clip.endSeconds - clip.startSeconds;
+  const seekLeadSeconds = Math.min(3, clip.startSeconds);
+  const coarseStart = Math.max(0, clip.startSeconds - seekLeadSeconds);
+  const fineSeek = clip.startSeconds - coarseStart;
   const subtitleFilter = `subtitles='${escapeSubtitlePath(subtitlesPath)}'`;
   const videoFilter = `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,${subtitleFilter}`;
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
+    '-ss', coarseStart.toFixed(3),
     '-i', source,
-    '-ss', clip.startSeconds.toFixed(3),
+    '-ss', fineSeek.toFixed(3),
     '-t', duration.toFixed(3),
     '-vf', videoFilter,
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p',
