@@ -62,6 +62,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       },
       body: JSON.stringify({
         model: this.config.openaiClipModel,
+        reasoning: { effort: 'low' },
         input: [
           {
             role: 'system',
