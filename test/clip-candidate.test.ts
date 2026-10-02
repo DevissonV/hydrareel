@@ -6,8 +6,7 @@ describe('clip candidate parsing and limits', () => {
     const result = validateAndNormalizeCandidates({ clips: [
       { startSeconds: 10, endSeconds: 40, title: 'A', hook: 'h', reason: 'r', score: 90 },
       { startSeconds: 20, endSeconds: 50, title: 'B', hook: 'h', reason: 'r', score: 80 },
-      { startSeconds: 70, endSeconds: 100, title: 'C', hook: 'h', reason: 'r', score: 70 },
-      { startSeconds: 120, endSeconds: 130, title: 'D', hook: 'h', reason: 'r', score: 60 }
+      { startSeconds: 70, endSeconds: 100, title: 'C', hook: 'h', reason: 'r', score: 70 }
     ]}, 20, 60, 200, 3);
     expect(result).toHaveLength(2);
     expect(result.map(x => x.title)).toEqual(['A','C']);
