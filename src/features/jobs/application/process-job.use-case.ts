@@ -90,15 +90,18 @@ export class ProcessJobUseCase {
         const outputPath = path.join(dir, `clip-${number}.mp4`);
         const captionStyle = 'pulse' as const;
         const framing = sourceMeta.width / sourceMeta.height > 0.82 ? 'subject-safe' as const : 'fill' as const;
+        const plan = this.rendering.createPlan(transcript, clip);
         const captionCueCount = await this.rendering.writeSubtitles(subtitlesPath, transcript, clip, {
           hook: clip.hook,
           captionStyle,
+          plan,
         });
         await this.rendering.render(sourcePath, outputPath, subtitlesPath, clip, {
           sourceWidth: sourceMeta.width,
           sourceHeight: sourceMeta.height,
           hook: clip.hook,
           captionStyle,
+          plan,
         });
         const outputMeta = await this.media.probe(outputPath);
         if (outputMeta.width !== 1080 || outputMeta.height !== 1920) throw new Error(`Clip ${number} no es 1080x1920`);
@@ -113,6 +116,14 @@ export class ProcessJobUseCase {
           hook: clip.hook,
           socialCaption: clip.socialCaption,
           hashtags: clip.hashtags,
+          emphasisTerms: clip.emphasisTerms,
+          magicEdit: {
+            silenceCuts: plan.silenceCuts,
+            removedSeconds: plan.removedSeconds,
+            punchIns: plan.punchIns.length,
+            audioPolished: plan.audioPolished,
+            colorPolished: plan.colorPolished,
+          },
           captionStyle,
           framing,
           durationSeconds: outputMeta.durationSeconds,
@@ -124,7 +135,18 @@ export class ProcessJobUseCase {
           video: { width: outputMeta.width, height: outputMeta.height, codec: outputMeta.videoCodec, audioCodec: outputMeta.audioCodec },
         });
         await this.jobs.save(job);
-        jobLog(job.id, 'clip_rendered', { clip: index + 1, key, durationSeconds: outputMeta.durationSeconds, captionCueCount });
+        jobLog(job.id, 'clip_rendered', {
+          clip: index + 1,
+          key,
+          durationSeconds: outputMeta.durationSeconds,
+          captionCueCount,
+          magicEdit: {
+            silenceCuts: plan.silenceCuts,
+            removedSeconds: plan.removedSeconds,
+            punchIns: plan.punchIns.length,
+            emphasisTerms: plan.emphasisTerms.length,
+          },
+        });
       }
       job.timings.renderDurationMs = Date.now() - r0;
       job.timings.totalDurationMs = Date.now() - started;
