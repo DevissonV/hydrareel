@@ -214,11 +214,30 @@ function semanticPhrase(cue: CaptionCue, terms: string[], style: CaptionStyle): 
   }));
 }
 
-function hookText(hook: string): string {
+function hookPresentation(hook: string): { text: string; fontSize: number } {
   const words = hook.trim().split(/\s+/).filter(Boolean).slice(0, 14);
-  if (words.length <= 6) return words.map(escapeAss).join(' ');
-  const middle = Math.ceil(words.length / 2);
-  return `${words.slice(0, middle).map(escapeAss).join(' ')}\\N${words.slice(middle).map(escapeAss).join(' ')}`;
+  const visible = words.join(' ');
+  const fontSize = visible.length <= 42 ? 54 : visible.length <= 68 ? 47 : 40;
+  if (words.length <= 5 || visible.length <= 34) {
+    return { text: words.map(escapeAss).join(' '), fontSize };
+  }
+
+  let bestBreak = 1;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < words.length; i += 1) {
+    const left = words.slice(0, i).join(' ').length;
+    const right = words.slice(i).join(' ').length;
+    const delta = Math.abs(left - right);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestBreak = i;
+    }
+  }
+
+  return {
+    text: `${words.slice(0, bestBreak).map(escapeAss).join(' ')}\\N${words.slice(bestBreak).map(escapeAss).join(' ')}`,
+    fontSize,
+  };
 }
 
 function punchExpression(plan: MagicEditPlan): string | undefined {
@@ -344,8 +363,9 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
     if (options.hook?.trim()) {
       const hookEnd = Math.min(3.0, plan.outputDuration);
       if (hookEnd > 0.5) {
+        const hook = hookPresentation(options.hook);
         events.push(
-          `Dialogue: 1,0:00:00.00,${assTime(hookEnd)},HydraHook,,0,0,0,,{\\fad(120,180)}${hookText(options.hook)}`,
+          `Dialogue: 1,0:00:00.00,${assTime(hookEnd)},HydraHook,,0,0,0,,{\\fs${hook.fontSize}\\fad(120,180)}${hook.text}`,
         );
       }
     }
