@@ -199,6 +199,7 @@ export class RegenerateClipUseCase {
     clientId: string,
     jobId: string,
     replacements: Array<{ from: string; to: string }> = [],
+    clipIndices?: number[],
   ): Promise<number> {
     const releaseRender = await this.renderGate.acquire(`transcript:${jobId}`);
     const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
@@ -239,7 +240,10 @@ export class RegenerateClipUseCase {
       }
 
       let updatedCount = 0;
-      for (const original of manifest.clips) {
+      const clipsToUpdate = clipIndices?.length
+        ? manifest.clips.filter((clip) => clipIndices.includes(clip.index))
+        : manifest.clips;
+      for (const original of clipsToUpdate) {
         const subtitlesPath = path.join(dir, `captions-${original.index}.ass`);
         const outputPath = path.join(dir, `output-${original.index}.mp4`);
 
