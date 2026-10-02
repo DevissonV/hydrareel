@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CONFIG, HydraConfig } from '../../../config';
 import { ClipBrainPort, ClipBrainResult } from '../application/clip-brain.port';
-import { validateAndNormalizeCandidates } from '../domain/clip-candidate';
+import { maxClipsForDuration, validateAndNormalizeCandidates } from '../domain/clip-candidate';
 import { Transcript } from '../../transcription/domain/transcript';
 
 function outputText(data: any): string {
@@ -20,6 +20,16 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
 
   async select(transcript: Transcript): Promise<ClipBrainResult> {
     if (!this.config.openaiApiKey) throw new Error('OPENAI_API_KEY no está configurada');
+
+    const maxClips = maxClipsForDuration(
+      transcript.duration,
+      this.config.minClipSeconds,
+      this.config.maxClipsPerJob,
+    );
+    if (maxClips === 0) {
+      throw new Error(`El video debe durar al menos ${this.config.minClipSeconds} segundos para generar un clip`);
+    }
+
     const timeline = transcript.segments.map((s) => ({ start: s.start, end: s.end, text: s.text }));
     const schema = {
       type: 'object',
@@ -27,7 +37,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       required: ['clips'],
       properties: {
         clips: {
-          type: 'array', minItems: 1, maxItems: Math.min(3, this.config.maxClipsPerJob),
+          type: 'array', minItems: 1, maxItems: maxClips,
           items: {
             type: 'object', additionalProperties: false,
             required: ['startSeconds', 'endSeconds', 'title', 'hook', 'reason', 'score'],
@@ -55,11 +65,11 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
         input: [
           {
             role: 'system',
-            content: `Eres Clip Brain V0 de HydraReel. Selecciona exactamente hasta ${Math.min(3, this.config.maxClipsPerJob)} momentos fuertes de una transcripción. Cada clip debe durar entre ${this.config.minClipSeconds} y ${this.config.maxClipSeconds} segundos. Usa únicamente timestamps reales presentes en la línea de tiempo. No cortes una frase por la mitad; cada clip debe entenderse sin contexto previo. Favorece hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita saludos, intros, patrocinadores, silencios y solapamientos. El score es una heurística editorial 0-100, nunca una probabilidad de viralidad.`,
+            content: `Eres Clip Brain V0 de HydraReel. Selecciona entre 1 y ${maxClips} momentos fuertes de una transcripción. No rellenes una cuota: si solo existe 1 momento realmente bueno, devuelve 1; si hay 2, devuelve 2. Cada clip debe durar entre ${this.config.minClipSeconds} y ${this.config.maxClipSeconds} segundos. Usa únicamente timestamps reales presentes en la línea de tiempo. No cortes una frase por la mitad; cada clip debe entenderse sin contexto previo. Favorece hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita saludos, intros, patrocinadores, silencios y solapamientos. El score es una heurística editorial 0-100, nunca una probabilidad de viralidad.`,
           },
           {
             role: 'user',
-            content: JSON.stringify({ duration: transcript.duration, timeline }),
+            content: JSON.stringify({ duration: transcript.duration, maxClips, timeline }),
           },
         ],
         text: { format: { type: 'json_schema', name: 'hydrareel_clips', strict: true, schema } },
@@ -74,7 +84,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       this.config.minClipSeconds,
       this.config.maxClipSeconds,
       transcript.duration,
-      Math.min(3, this.config.maxClipsPerJob),
+      maxClips,
     );
     if (!clips.length) throw new Error('Clip Brain no produjo candidatos válidos');
     return { clips, usage: data.usage };
