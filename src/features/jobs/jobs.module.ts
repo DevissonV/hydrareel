@@ -1,0 +1,24 @@
+import { Module } from '@nestjs/common';
+import { StorageModule } from '../storage/storage.module';
+import { MediaModule } from '../media/media.module';
+import { TranscriptionModule } from '../transcription/transcription.module';
+import { ClipBrainModule } from '../clip-brain/clip-brain.module';
+import { RenderingModule } from '../rendering/rendering.module';
+import { JOB_REPOSITORY, InMemoryJobRepository } from './application/job.repository';
+import { CreateUploadUseCase } from './application/create-upload.use-case';
+import { ProcessJobUseCase } from './application/process-job.use-case';
+import { GetJobUseCase } from './application/get-job.use-case';
+import { JobsController } from './presentation/jobs.controller';
+
+@Module({
+  imports: [StorageModule, MediaModule, TranscriptionModule, ClipBrainModule, RenderingModule],
+  controllers: [JobsController],
+  providers: [
+    InMemoryJobRepository,
+    { provide: JOB_REPOSITORY, useExisting: InMemoryJobRepository },
+    CreateUploadUseCase,
+    ProcessJobUseCase,
+    GetJobUseCase,
+  ],
+})
+export class JobsModule {}
