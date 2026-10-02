@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
-import { CaptionStyle, RenderingPort, RenderOptions } from '../application/rendering.port';
+import {
+  CaptionStyle,
+  MagicEditPlan,
+  RenderingPort,
+  RenderOptions,
+} from '../application/rendering.port';
 import { Transcript, TranscriptWord } from '../../transcription/domain/transcript';
 import { ClipCandidate } from '../../clip-brain/domain/clip-candidate';
 
@@ -34,12 +39,35 @@ function escapeAss(text: string): string {
     .replace(/\n/g, ' ');
 }
 
+function normalizeWord(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9$%]+/g, '');
+}
+
+function emphasisTokens(terms: string[]): Set<string> {
+  const tokens = new Set<string>();
+  for (const term of terms) {
+    for (const token of term.split(/\s+/)) {
+      const normalized = normalizeWord(token);
+      if (normalized.length >= 2) tokens.add(normalized);
+    }
+  }
+  return tokens;
+}
+
+function wrapTokens(tokens: string[]): string {
+  if (tokens.length <= 3) return tokens.join(' ');
+  const visible = tokens.join(' ').replace(/\{[^}]+\}/g, '');
+  if (visible.length <= 28) return tokens.join(' ');
+  const middle = Math.ceil(tokens.length / 2);
+  return `${tokens.slice(0, middle).join(' ')}\\N${tokens.slice(middle).join(' ')}`;
+}
+
 function wrapWords(words: string[]): string {
-  if (words.length <= 3) return words.map(escapeAss).join(' ');
-  const raw = words.join(' ');
-  if (raw.length <= 26) return escapeAss(raw);
-  const middle = Math.ceil(words.length / 2);
-  return `${words.slice(0, middle).map(escapeAss).join(' ')}\\N${words.slice(middle).map(escapeAss).join(' ')}`;
+  return wrapTokens(words.map(escapeAss));
 }
 
 export interface CaptionCue {
@@ -50,19 +78,17 @@ export interface CaptionCue {
 }
 
 export function buildCaptionCues(words: TranscriptWord[], clip: ClipCandidate): CaptionCue[] {
-  const inside = words.filter((w) => w.end > clip.startSeconds && w.start < clip.endSeconds);
+  const inside = words.filter((word) => word.end > clip.startSeconds && word.start < clip.endSeconds);
   const cues: CaptionCue[] = [];
   let current: TranscriptWord[] = [];
 
   const flush = () => {
     if (!current.length) return;
-    const start = Math.max(0, current[0].start - clip.startSeconds);
-    const end = Math.min(clip.endSeconds - clip.startSeconds, current.at(-1)!.end - clip.startSeconds);
     cues.push({
-      start,
-      end,
+      start: Math.max(0, current[0].start - clip.startSeconds),
+      end: Math.min(clip.endSeconds - clip.startSeconds, current.at(-1)!.end - clip.startSeconds),
       words: current,
-      text: wrapWords(current.map((w) => w.word)),
+      text: wrapWords(current.map((word) => word.word)),
     });
     current = [];
   };
@@ -71,13 +97,13 @@ export function buildCaptionCues(words: TranscriptWord[], clip: ClipCandidate): 
     const previous = current.at(-1);
     const gap = previous ? word.start - previous.end : 0;
     const projected = [...current, word];
-    const text = projected.map((w) => w.word).join(' ');
+    const text = projected.map((item) => item.word).join(' ');
     const duration = projected.at(-1)!.end - projected[0].start;
     const shouldBreak =
       current.length >= 5 ||
-      text.length > 34 ||
-      duration > 2.25 ||
-      (gap > 0.35 && current.length >= 2);
+      text.length > 36 ||
+      duration > 2.35 ||
+      (gap > 0.38 && current.length >= 2);
 
     if (shouldBreak) flush();
     current.push(word);
@@ -86,27 +112,128 @@ export function buildCaptionCues(words: TranscriptWord[], clip: ClipCandidate): 
   return cues.filter((cue) => cue.end > cue.start);
 }
 
+function mapSourceToOutput(sourceTime: number, plan: MagicEditPlan): number {
+  const first = plan.segments[0];
+  if (!first) return 0;
+  if (sourceTime <= first.sourceStart) return 0;
+
+  for (const segment of plan.segments) {
+    if (sourceTime >= segment.sourceStart && sourceTime <= segment.sourceEnd) {
+      return segment.outputStart + (sourceTime - segment.sourceStart);
+    }
+    if (sourceTime < segment.sourceStart) return segment.outputStart;
+  }
+
+  return plan.outputDuration;
+}
+
+export function buildMagicEditPlan(transcript: Transcript, clip: ClipCandidate): MagicEditPlan {
+  const inside = transcript.words.filter(
+    (word) => word.end > clip.startSeconds && word.start < clip.endSeconds,
+  );
+
+  const cutRanges: Array<{ start: number; end: number }> = [];
+  for (let i = 1; i < inside.length && cutRanges.length < 8; i += 1) {
+    const previous = inside[i - 1];
+    const current = inside[i];
+    const gap = current.start - previous.end;
+    if (gap < 0.9) continue;
+
+    const cutStart = Math.max(clip.startSeconds, previous.end + 0.1);
+    const cutEnd = Math.min(clip.endSeconds, current.start - 0.12);
+    if (cutEnd - cutStart >= 0.42) cutRanges.push({ start: cutStart, end: cutEnd });
+  }
+
+  const rawSegments: Array<{ sourceStart: number; sourceEnd: number }> = [];
+  let cursor = clip.startSeconds;
+  for (const cut of cutRanges) {
+    if (cut.start > cursor + 0.04) rawSegments.push({ sourceStart: cursor, sourceEnd: cut.start });
+    cursor = Math.max(cursor, cut.end);
+  }
+  if (clip.endSeconds > cursor + 0.04) {
+    rawSegments.push({ sourceStart: cursor, sourceEnd: clip.endSeconds });
+  }
+  if (!rawSegments.length) {
+    rawSegments.push({ sourceStart: clip.startSeconds, sourceEnd: clip.endSeconds });
+  }
+
+  let outputCursor = 0;
+  const segments = rawSegments.map((segment) => {
+    const duration = Math.max(0, segment.sourceEnd - segment.sourceStart);
+    const result = {
+      ...segment,
+      outputStart: outputCursor,
+      outputEnd: outputCursor + duration,
+    };
+    outputCursor += duration;
+    return result;
+  });
+
+  const removedSeconds = Math.max(
+    0,
+    (clip.endSeconds - clip.startSeconds) - outputCursor,
+  );
+
+  const terms = clip.emphasisTerms ?? [];
+  const tokens = emphasisTokens(terms);
+  const punchIns: Array<{ start: number; end: number }> = [];
+
+  for (const word of inside) {
+    if (punchIns.length >= 3) break;
+    if (!tokens.has(normalizeWord(word.word))) continue;
+    const mapped = mapSourceToOutput(word.start, {
+      segments,
+      silenceCuts: cutRanges.length,
+      removedSeconds,
+      punchIns: [],
+      emphasisTerms: terms,
+      outputDuration: outputCursor,
+      audioPolished: true,
+      colorPolished: true,
+    });
+    if (mapped < 2.2 || mapped > outputCursor - 1) continue;
+    if (punchIns.some((event) => Math.abs(event.start - mapped) < 3.8)) continue;
+    punchIns.push({
+      start: Math.max(0, mapped - 0.18),
+      end: Math.min(outputCursor, mapped + 1.05),
+    });
+  }
+
+  return {
+    segments,
+    silenceCuts: cutRanges.length,
+    removedSeconds: Number(removedSeconds.toFixed(3)),
+    punchIns,
+    emphasisTerms: terms,
+    outputDuration: Number(outputCursor.toFixed(3)),
+    audioPolished: true,
+    colorPolished: true,
+  };
+}
+
 function escapeSubtitlePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
 }
 
 function captionPalette(style: CaptionStyle) {
-  if (style === 'clean') return { fontSize: 58, active: '&H00FFFFFF', base: '&H00FFFFFF', outline: 4, shadow: 0.8 };
-  if (style === 'neon') return { fontSize: 64, active: '&H00FFD85A', base: '&H00FFFFFF', outline: 5, shadow: 1.6 };
-  return { fontSize: 62, active: '&H00FF77FF', base: '&H00FFFFFF', outline: 5, shadow: 1.1 };
+  if (style === 'clean') {
+    return { fontSize: 58, accent: '&H00FFFFFF', outline: 4, shadow: 0.8 };
+  }
+  if (style === 'neon') {
+    return { fontSize: 62, accent: '&H00FFD85A', outline: 5, shadow: 1.4 };
+  }
+  return { fontSize: 60, accent: '&H00FF77FF', outline: 5, shadow: 1.0 };
 }
 
-function activePhrase(cue: CaptionCue, activeIndex: number, style: CaptionStyle): string {
+function semanticPhrase(cue: CaptionCue, terms: string[], style: CaptionStyle): string {
   const palette = captionPalette(style);
-  const tokens = cue.words.map((word, index) => {
+  const tokens = emphasisTokens(terms);
+
+  return wrapTokens(cue.words.map((word) => {
     const safe = escapeAss(word.word);
-    return index === activeIndex
-      ? `{\\c${palette.active}\\b1\\fscx108\\fscy108}${safe}{\\c${palette.base}\\b1\\fscx100\\fscy100}`
-      : safe;
-  });
-  if (tokens.length <= 3 || tokens.join(' ').replace(/\{[^}]+\}/g, '').length <= 26) return tokens.join(' ');
-  const middle = Math.ceil(tokens.length / 2);
-  return `${tokens.slice(0, middle).join(' ')}\\N${tokens.slice(middle).join(' ')}`;
+    if (!tokens.has(normalizeWord(word.word))) return safe;
+    return `{\\c${palette.accent}\\b1}${safe}{\\c&H00FFFFFF\\b1}`;
+  }));
 }
 
 function hookText(hook: string): string {
@@ -116,6 +243,14 @@ function hookText(hook: string): string {
   return `${words.slice(0, middle).map(escapeAss).join(' ')}\\N${words.slice(middle).map(escapeAss).join(' ')}`;
 }
 
+function punchExpression(plan: MagicEditPlan): string | undefined {
+  if (!plan.punchIns.length) return undefined;
+  const events = plan.punchIns.map(({ start, end }) =>
+    `if(between(on/30,${start.toFixed(3)},${end.toFixed(3)}),max(0,min(1,min((on/30-${start.toFixed(3)})/0.18,(${end.toFixed(3)}-on/30)/0.18))),0)`,
+  );
+  return events.reduce((acc, event) => acc ? `max(${acc},${event})` : event, '');
+}
+
 export function buildRenderArgs(
   source: string,
   destination: string,
@@ -123,25 +258,76 @@ export function buildRenderArgs(
   clip: ClipCandidate,
   options: RenderOptions = { sourceWidth: 1080, sourceHeight: 1920 },
 ): string[] {
-  const duration = clip.endSeconds - clip.startSeconds;
-  const seekLeadSeconds = Math.min(3, clip.startSeconds);
-  const coarseStart = Math.max(0, clip.startSeconds - seekLeadSeconds);
-  const fineSeek = clip.startSeconds - coarseStart;
-  const subtitleFilter = `subtitles='${escapeSubtitlePath(subtitlesPath)}'`;
+  const plan = options.plan ?? {
+    segments: [{
+      sourceStart: clip.startSeconds,
+      sourceEnd: clip.endSeconds,
+      outputStart: 0,
+      outputEnd: clip.endSeconds - clip.startSeconds,
+    }],
+    silenceCuts: 0,
+    removedSeconds: 0,
+    punchIns: [],
+    emphasisTerms: clip.emphasisTerms ?? [],
+    outputDuration: clip.endSeconds - clip.startSeconds,
+    audioPolished: true,
+    colorPolished: true,
+  };
+
+  const coarseStart = Math.max(0, (plan.segments[0]?.sourceStart ?? clip.startSeconds) - 3);
+  const filters: string[] = [];
+  const pairs: string[] = [];
+
+  plan.segments.forEach((segment, index) => {
+    const start = Math.max(0, segment.sourceStart - coarseStart);
+    const end = Math.max(start + 0.01, segment.sourceEnd - coarseStart);
+    filters.push(
+      `[0:v]trim=start=${start.toFixed(3)}:end=${end.toFixed(3)},setpts=PTS-STARTPTS[sv${index}]`,
+    );
+    filters.push(
+      `[0:a]atrim=start=${start.toFixed(3)}:end=${end.toFixed(3)},asetpts=PTS-STARTPTS[sa${index}]`,
+    );
+    pairs.push(`[sv${index}][sa${index}]`);
+  });
+
+  if (plan.segments.length === 1) {
+    filters.push('[sv0]null[basev]');
+    filters.push('[sa0]anull[basea]');
+  } else {
+    filters.push(`${pairs.join('')}concat=n=${plan.segments.length}:v=1:a=1[basev][basea]`);
+  }
+
   const aspect = options.sourceHeight > 0 ? options.sourceWidth / options.sourceHeight : 9 / 16;
   const subjectSafe = aspect > 0.82;
 
-  const visualFilter = subjectSafe
-    ? `[0:v]trim=start=${fineSeek.toFixed(3)}:duration=${duration.toFixed(3)},setpts=PTS-STARTPTS,split=2[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=32[bg2];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=(W-w)/2:(H-h)/2,${subtitleFilter}[v]`
-    : `[0:v]trim=start=${fineSeek.toFixed(3)}:duration=${duration.toFixed(3)},setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,${subtitleFilter}[v]`;
+  if (subjectSafe) {
+    filters.push('[basev]split=2[bg][fg]');
+    filters.push('[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=32[bg2]');
+    filters.push('[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2]');
+    filters.push('[bg2][fg2]overlay=(W-w)/2:(H-h)/2[framed]');
+  } else {
+    filters.push('[basev]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[framed]');
+  }
 
-  const audioFilter = `[0:a]atrim=start=${fineSeek.toFixed(3)}:duration=${duration.toFixed(3)},asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0[a]`;
+  filters.push('[framed]eq=contrast=1.035:saturation=1.045:brightness=0.004,unsharp=5:5:0.22:5:5:0[look]');
+
+  const expression = punchExpression(plan);
+  if (expression) {
+    filters.push(
+      `[look]zoompan=z='1+0.065*(${expression})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30[punch]`,
+    );
+  } else {
+    filters.push('[look]null[punch]');
+  }
+
+  filters.push(`[punch]subtitles='${escapeSubtitlePath(subtitlesPath)}'[v]`);
+  filters.push('[basea]highpass=f=70,acompressor=threshold=0.10:ratio=2.4:attack=20:release=250:makeup=1.35,loudnorm=I=-16:TP=-1.5:LRA=11[a]');
 
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
     '-ss', coarseStart.toFixed(3),
     '-i', source,
-    '-filter_complex', `${visualFilter};${audioFilter}`,
+    '-filter_complex', filters.join(';'),
     '-map', '[v]',
     '-map', '[a]',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p',
@@ -153,14 +339,19 @@ export function buildRenderArgs(
 
 @Injectable()
 export class FfmpegRenderingAdapter implements RenderingPort {
+  createPlan(transcript: Transcript, clip: ClipCandidate): MagicEditPlan {
+    return buildMagicEditPlan(transcript, clip);
+  }
+
   async writeSubtitles(
     path: string,
     transcript: Transcript,
     clip: ClipCandidate,
-    options: Pick<RenderOptions, 'hook' | 'captionStyle'>,
+    options: { hook?: string; captionStyle?: CaptionStyle; plan?: MagicEditPlan },
   ): Promise<number> {
     const style = options.captionStyle ?? 'pulse';
     const palette = captionPalette(style);
+    const plan = options.plan ?? buildMagicEditPlan(transcript, clip);
     const cues = buildCaptionCues(transcript.words, clip);
 
     const header = `[Script Info]
@@ -181,43 +372,28 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 
     const events: string[] = [];
     if (options.hook?.trim()) {
-      const hookEnd = Math.min(3.2, clip.endSeconds - clip.startSeconds);
+      const hookEnd = Math.min(3.0, plan.outputDuration);
       if (hookEnd > 0.5) {
-        events.push(`Dialogue: 1,0:00:00.00,${assTime(hookEnd)},HydraHook,,0,0,0,,{\\fad(120,180)}${hookText(options.hook)}`);
-      }
-    }
-
-    if (cues.length) {
-      for (const cue of cues) {
-        for (let i = 0; i < cue.words.length; i += 1) {
-          const word = cue.words[i];
-          const next = cue.words[i + 1];
-          const start = Math.max(cue.start, word.start - clip.startSeconds);
-          const end = Math.min(
-            clip.endSeconds - clip.startSeconds,
-            next ? Math.max(word.end, next.start - clip.startSeconds) : cue.end,
-          );
-          if (end <= start) continue;
-          events.push(
-            `Dialogue: 0,${assTime(start)},${assTime(end)},HydraCaption,,0,0,0,,{\\fad(45,45)}${activePhrase(cue, i, style)}`,
-          );
-        }
-      }
-    } else {
-      const segments = transcript.segments.filter((s) => s.end > clip.startSeconds && s.start < clip.endSeconds);
-      for (const segment of segments) {
-        const start = Math.max(0, segment.start - clip.startSeconds);
-        const end = Math.min(clip.endSeconds - clip.startSeconds, segment.end - clip.startSeconds);
-        if (end <= start) continue;
         events.push(
-          `Dialogue: 0,${assTime(start)},${assTime(end)},HydraCaption,,0,0,0,,${hookText(segment.text)}`,
+          `Dialogue: 1,0:00:00.00,${assTime(hookEnd)},HydraHook,,0,0,0,,{\\fad(120,180)}${hookText(options.hook)}`,
         );
       }
     }
 
+    for (const cue of cues) {
+      const sourceStart = clip.startSeconds + cue.start;
+      const sourceEnd = clip.startSeconds + cue.end;
+      const start = mapSourceToOutput(sourceStart, plan);
+      const end = mapSourceToOutput(sourceEnd, plan);
+      if (end <= start + 0.04) continue;
+      events.push(
+        `Dialogue: 0,${assTime(start)},${assTime(end)},HydraCaption,,0,0,0,,{\\fad(55,70)\\fscx104\\fscy104\\t(0,120,\\fscx100\\fscy100)}${semanticPhrase(cue, plan.emphasisTerms, style)}`,
+      );
+    }
+
     if (!events.length) throw new Error('No hay timestamps para generar subtítulos');
     await writeFile(path, header + events.join('\n') + '\n', 'utf8');
-    return cues.length || events.length;
+    return cues.length;
   }
 
   async render(
