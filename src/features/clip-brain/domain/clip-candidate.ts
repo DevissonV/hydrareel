@@ -12,13 +12,49 @@ export const clipCandidateSchema = z.object({
 export const clipSelectionSchema = z.object({ clips: z.array(clipCandidateSchema) });
 export type ClipCandidate = z.infer<typeof clipCandidateSchema>;
 
+export interface ClipPolicy {
+  minSeconds: number;
+  maxSeconds: number;
+  maxClips: number;
+}
+
+export function clipPolicyForDuration(
+  durationSeconds: number,
+  configuredMinSeconds: number,
+  configuredMaxSeconds: number,
+  configuredMaxClips: number,
+): ClipPolicy {
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 8) {
+    return { minSeconds: 8, maxSeconds: Math.max(8, durationSeconds || 8), maxClips: 0 };
+  }
+
+  let minSeconds = configuredMinSeconds;
+  let maxSeconds = configuredMaxSeconds;
+
+  if (durationSeconds < 60) {
+    minSeconds = Math.min(configuredMinSeconds, 8);
+    maxSeconds = Math.min(configuredMaxSeconds, 30, durationSeconds);
+  } else if (durationSeconds < 180) {
+    minSeconds = Math.min(configuredMinSeconds, 12);
+    maxSeconds = Math.min(configuredMaxSeconds, 45, durationSeconds);
+  } else {
+    maxSeconds = Math.min(configuredMaxSeconds, durationSeconds);
+  }
+
+  const maxClips = Math.max(
+    1,
+    Math.min(configuredMaxClips, Math.floor(durationSeconds / Math.max(minSeconds, 1))),
+  );
+
+  return { minSeconds, maxSeconds, maxClips };
+}
+
 export function maxClipsForDuration(
   durationSeconds: number,
   minClipSeconds: number,
   configuredMaxClips: number,
 ): number {
-  if (!Number.isFinite(durationSeconds) || durationSeconds < minClipSeconds) return 0;
-  return Math.max(0, Math.min(configuredMaxClips, Math.floor(durationSeconds / minClipSeconds)));
+  return clipPolicyForDuration(durationSeconds, minClipSeconds, 60, configuredMaxClips).maxClips;
 }
 
 export function validateAndNormalizeCandidates(
