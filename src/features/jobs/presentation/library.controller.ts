@@ -59,7 +59,9 @@ export class LibraryController {
     @Param('clipIndex') clipIndex: string,
     @Body() body: { mode?: unknown; captionStyle?: unknown },
   ) {
-    return this.regenerate.execute(clientId, jobId, clipIndex, body);
+    const task = this.regenerate.execute(clientId, jobId, clipIndex, body);
+    void task.catch(() => undefined);
+    return { accepted: true, clipIndex: Number.parseInt(clipIndex, 10) };
   }
 
   @Delete(':jobId')
