@@ -81,7 +81,7 @@ export class ProcessJobUseCase {
       job.transition('RENDERING');
       await this.jobs.save(job);
       const r0 = Date.now();
-      for (const [index, clip] of brain.clips.slice(0, 3).entries()) {
+      for (const [index, clip] of brain.clips.slice(0, this.config.maxClipsPerJob).entries()) {
         const number = String(index + 1).padStart(2, '0');
         const subtitlesPath = path.join(dir, `clip-${number}.srt`);
         const outputPath = path.join(dir, `clip-${number}.mp4`);
