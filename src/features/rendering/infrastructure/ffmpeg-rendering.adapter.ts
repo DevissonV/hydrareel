@@ -92,14 +92,15 @@ export function buildRenderArgs(source: string, destination: string, subtitlesPa
   const coarseStart = Math.max(0, clip.startSeconds - seekLeadSeconds);
   const fineSeek = clip.startSeconds - coarseStart;
   const subtitleFilter = `subtitles='${escapeSubtitlePath(subtitlesPath)}'`;
-  const videoFilter = `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,${subtitleFilter}`;
+  const videoFilter = `[0:v]trim=start=${fineSeek.toFixed(3)}:duration=${duration.toFixed(3)},setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,${subtitleFilter}[v]`;
+  const audioFilter = `[0:a]atrim=start=${fineSeek.toFixed(3)}:duration=${duration.toFixed(3)},asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0[a]`;
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
     '-ss', coarseStart.toFixed(3),
     '-i', source,
-    '-ss', fineSeek.toFixed(3),
-    '-t', duration.toFixed(3),
-    '-vf', videoFilter,
+    '-filter_complex', `${videoFilter};${audioFilter}`,
+    '-map', '[v]',
+    '-map', '[a]',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '128k',
     '-movflags', '+faststart',
