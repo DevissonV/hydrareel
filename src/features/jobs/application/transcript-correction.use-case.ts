@@ -1,0 +1,188 @@
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { OBJECT_STORAGE, ObjectStoragePort } from '../../storage/application/object-storage.port';
+import { JOB_REPOSITORY, JobRepository } from './job.repository';
+import { Transcript, TranscriptSegment, TranscriptWord } from '../../transcription/domain/transcript';
+
+interface StoredTranscript extends Omit<Transcript, 'model' | 'usage'> {
+  jobId?: string;
+  model?: string;
+  correctedAt?: string;
+  correctionCount?: number;
+}
+
+function assertUuid(value: string | undefined, name: string): string {
+  if (!value || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new BadRequestException(`${name} inválido`);
+  }
+  return value;
+}
+
+function normalizeToken(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9áéíóúñü$%]+/gi, '');
+}
+
+function tokens(text: string): string[] {
+  return text.trim().match(/\S+/g) ?? [];
+}
+
+function retimeWords(original: TranscriptWord[], correctedText: string, duration: number): TranscriptWord[] {
+  const corrected = tokens(correctedText);
+  if (!corrected.length) throw new BadRequestException('La transcripción no puede quedar vacía');
+  if (!original.length) {
+    const slice = duration / corrected.length;
+    return corrected.map((word, index) => ({ word, start: index * slice, end: (index + 1) * slice }));
+  }
+
+  const result: TranscriptWord[] = [];
+  let i = 0;
+  let j = 0;
+  const lookAhead = 6;
+
+  const addInserted = (word: string, nextStart: number) => {
+    const previousEnd = result.at(-1)?.end ?? 0;
+    const available = Math.max(0.04, nextStart - previousEnd);
+    const start = previousEnd;
+    const end = Math.min(nextStart, start + Math.max(0.04, Math.min(0.22, available)));
+    result.push({ word, start, end: Math.max(start + 0.01, end) });
+  };
+
+  while (i < original.length && j < corrected.length) {
+    if (normalizeToken(original[i].word) === normalizeToken(corrected[j])) {
+      result.push({ ...original[i], word: corrected[j] });
+      i += 1;
+      j += 1;
+      continue;
+    }
+
+    let correctedAhead = -1;
+    for (let k = 1; k <= lookAhead && j + k < corrected.length; k += 1) {
+      if (normalizeToken(corrected[j + k]) === normalizeToken(original[i].word)) {
+        correctedAhead = k;
+        break;
+      }
+    }
+
+    let originalAhead = -1;
+    for (let k = 1; k <= lookAhead && i + k < original.length; k += 1) {
+      if (normalizeToken(original[i + k].word) === normalizeToken(corrected[j])) {
+        originalAhead = k;
+        break;
+      }
+    }
+
+    if (correctedAhead > 0 && (originalAhead < 0 || correctedAhead <= originalAhead)) {
+      for (let k = 0; k < correctedAhead; k += 1) {
+        addInserted(corrected[j + k], original[i].start);
+      }
+      j += correctedAhead;
+      continue;
+    }
+
+    if (originalAhead > 0) {
+      i += originalAhead;
+      continue;
+    }
+
+    result.push({ ...original[i], word: corrected[j] });
+    i += 1;
+    j += 1;
+  }
+
+  while (j < corrected.length) {
+    const previousEnd = result.at(-1)?.end ?? original.at(-1)?.end ?? 0;
+    const start = Math.min(duration, previousEnd);
+    const end = Math.min(duration, start + 0.14);
+    result.push({ word: corrected[j], start, end: Math.max(start + 0.01, end) });
+    j += 1;
+  }
+
+  return result.filter((word) => word.end > word.start);
+}
+
+function rebuildSegments(segments: TranscriptSegment[], words: TranscriptWord[]): TranscriptSegment[] {
+  return segments.map((segment) => {
+    const text = words
+      .filter((word) => {
+        const midpoint = (word.start + word.end) / 2;
+        return midpoint >= segment.start && midpoint <= segment.end;
+      })
+      .map((word) => word.word)
+      .join(' ')
+      .trim();
+    return { ...segment, text: text || segment.text };
+  });
+}
+
+@Injectable()
+export class TranscriptCorrectionUseCase {
+  constructor(
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
+    @Inject(JOB_REPOSITORY) private readonly jobs: JobRepository,
+  ) {}
+
+  private async ownedJob(rawClientId: string | undefined, rawJobId: string) {
+    const clientId = assertUuid(rawClientId, 'clientId');
+    const jobId = assertUuid(rawJobId, 'jobId');
+    const job = await this.jobs.get(jobId);
+    if (!job || job.clientId !== clientId) throw new NotFoundException('Proyecto no encontrado');
+    return job;
+  }
+
+  async get(rawClientId: string | undefined, rawJobId: string) {
+    const job = await this.ownedJob(rawClientId, rawJobId);
+    try {
+      const transcript = await this.storage.getJson<StoredTranscript>(`transcripts/${job.id}/transcript.json`);
+      return {
+        jobId: job.id,
+        text: transcript.text,
+        correctedAt: transcript.correctedAt,
+        correctionCount: transcript.correctionCount ?? 0,
+      };
+    } catch {
+      throw new NotFoundException('La transcripción todavía no está disponible');
+    }
+  }
+
+  async update(rawClientId: string | undefined, rawJobId: string, rawText: unknown) {
+    const job = await this.ownedJob(rawClientId, rawJobId);
+    if (typeof rawText !== 'string') throw new BadRequestException('Texto inválido');
+    const text = rawText.trim();
+    if (!text) throw new BadRequestException('La transcripción no puede quedar vacía');
+    if (text.length > 120_000) throw new BadRequestException('La transcripción es demasiado larga');
+
+    const key = `transcripts/${job.id}/transcript.json`;
+    let transcript: StoredTranscript;
+    try {
+      transcript = await this.storage.getJson<StoredTranscript>(key);
+    } catch {
+      throw new NotFoundException('La transcripción todavía no está disponible');
+    }
+
+    if (text === transcript.text.trim()) {
+      return { jobId: job.id, text, correctedAt: transcript.correctedAt, correctionCount: transcript.correctionCount ?? 0 };
+    }
+
+    const correctedWords = retimeWords(transcript.words ?? [], text, transcript.duration);
+    const correctedAt = new Date().toISOString();
+    const updated: StoredTranscript = {
+      ...transcript,
+      text,
+      words: correctedWords,
+      segments: rebuildSegments(transcript.segments ?? [], correctedWords),
+      correctedAt,
+      correctionCount: (transcript.correctionCount ?? 0) + 1,
+    };
+    await this.storage.putJson(key, updated);
+
+    return {
+      jobId: job.id,
+      text,
+      correctedAt,
+      correctionCount: updated.correctionCount,
+    };
+  }
+}
