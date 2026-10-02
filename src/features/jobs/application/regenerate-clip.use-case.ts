@@ -100,10 +100,10 @@ export class RegenerateClipUseCase {
         startSeconds: original.startSeconds,
         endSeconds: original.endSeconds,
         title: original.title,
-        hook: original.hook,
+        hook: original.hook ?? original.title,
         reason: original.reason,
-        socialCaption: original.socialCaption,
-        hashtags: original.hashtags,
+        socialCaption: original.socialCaption ?? original.reason,
+        hashtags: original.hashtags?.length ? original.hashtags : ['#HydraReel'],
         score: original.score,
       };
 
