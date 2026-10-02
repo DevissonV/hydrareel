@@ -12,6 +12,7 @@ import { CLIP_BRAIN_PORT, ClipBrainPort } from '../../clip-brain/application/cli
 import { RENDERING_PORT, RenderingPort } from '../../rendering/application/rendering.port';
 import { validateMediaDuration } from './input-validation';
 import { RenderGate } from './render-gate';
+import { emptyProjectMetrics } from '../domain/project-metrics';
 
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
@@ -183,6 +184,12 @@ export class ProcessJobUseCase implements OnModuleInit {
       job.timings.renderDurationMs = Date.now() - r0;
       job.timings.totalDurationMs = Date.now() - started;
       const completedAt = new Date().toISOString();
+      const metrics = emptyProjectMetrics();
+      metrics.initialClipsGenerated = job.clips.length;
+      metrics.initialOutputDurationSeconds = Number(
+        job.clips.reduce((sum, clip) => sum + Number(clip.durationSeconds || 0), 0).toFixed(3),
+      );
+      metrics.initialProcessingDurationMs = job.timings.totalDurationMs ?? 0;
       await this.storage.putJson(`clients/${job.clientId}/jobs/${job.id}.json`, {
         id: job.id,
         clientId: job.clientId,
@@ -192,6 +199,7 @@ export class ProcessJobUseCase implements OnModuleInit {
         createdAt: job.createdAt.toISOString(),
         completedAt,
         processingDurationMs: job.timings.totalDurationMs,
+        metrics,
         clips: job.clips,
       });
       job.transition('COMPLETED');
