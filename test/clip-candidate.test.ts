@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { maxClipsForDuration, validateAndNormalizeCandidates } from '../src/features/clip-brain/domain/clip-candidate';
+import { clipPolicyForDuration, validateAndNormalizeCandidates } from '../src/features/clip-brain/domain/clip-candidate';
 
-describe('clip candidate parsing and limits', () => {
-  it('calcula el máximo dinámico por duración', () => {
-    expect(maxClipsForDuration(19.9, 20, 3)).toBe(0);
-    expect(maxClipsForDuration(39, 20, 3)).toBe(1);
-    expect(maxClipsForDuration(46.2, 20, 3)).toBe(2);
-    expect(maxClipsForDuration(84.9, 20, 3)).toBe(3);
-    expect(maxClipsForDuration(600, 20, 3)).toBe(3);
+describe('clip policy and candidate validation', () => {
+  it('adapta duración y cantidad al tamaño del video', () => {
+    expect(clipPolicyForDuration(7.9, 20, 60, 3).maxClips).toBe(0);
+
+    const short = clipPolicyForDuration(46.2, 20, 60, 3);
+    expect(short).toEqual({ minSeconds: 8, maxSeconds: 30, maxClips: 3 });
+
+    const medium = clipPolicyForDuration(120, 20, 60, 3);
+    expect(medium).toEqual({ minSeconds: 12, maxSeconds: 45, maxClips: 3 });
+
+    const long = clipPolicyForDuration(600, 20, 60, 3);
+    expect(long).toEqual({ minSeconds: 20, maxSeconds: 60, maxClips: 3 });
   });
 
-  it('permite devolver menos clips que el máximo si no hay más candidatos buenos', () => {
+  it('permite devolver menos clips que el máximo si solo hay uno bueno', () => {
     const result = validateAndNormalizeCandidates({ clips: [
-      { startSeconds: 10, endSeconds: 40, title: 'Único momento fuerte', hook: 'h', reason: 'r', score: 90 }
-    ]}, 20, 60, 120, 3);
+      { startSeconds: 10, endSeconds: 26, title: 'Único momento fuerte', hook: 'h', reason: 'r', score: 90 }
+    ]}, 8, 30, 46.2, 3);
     expect(result).toHaveLength(1);
   });
 
