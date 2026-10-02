@@ -41,6 +41,7 @@ export class Job {
     readonly originalFileName: string,
     readonly sourceKey: string,
     readonly contentType: string,
+    readonly clientId: string,
   ) {}
 
   transition(next: JobStatus): void {
