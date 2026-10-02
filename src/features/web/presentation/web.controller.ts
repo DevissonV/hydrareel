@@ -49,8 +49,8 @@ const html = String.raw`<!doctype html>
     .file-trigger{position:relative;display:flex;align-items:center;justify-content:center;margin-top:16px;overflow:hidden;user-select:none;-webkit-user-select:none}
     .native-file{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:100px}
     .file-trigger.busy{opacity:.5;pointer-events:none}
-    .file-trigger.secondary-upload{margin-top:10px;background:#0d1528;border:1px solid #56638455;box-shadow:none;color:#dfe5f6}
-    .file-trigger.secondary-upload:hover{background:#121c34;filter:none}
+    .nav-actions{display:flex;gap:8px;align-items:center}.nav-btn{border:1px solid var(--line);background:#10172a;color:#cbd4ea;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer}.nav-btn.active{background:linear-gradient(105deg,#713cf0,#315fff);color:#fff;border-color:#8b79ff55}
+    .library{max-width:980px;margin:18px auto}.library-grid{display:grid;gap:18px}.project-card{background:linear-gradient(155deg,rgba(20,28,51,.92),rgba(10,15,30,.94));border:1px solid var(--line);border-radius:24px;padding:18px;box-shadow:0 24px 70px #0006}.project-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.project-name{font-size:19px;font-weight:900;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta{color:#8692ae;font-size:12px;margin-top:6px}.project-clips{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:16px}.mini-clip{background:#090e1b;border:1px solid #52617d35;border-radius:16px;padding:9px}.mini-clip video{width:100%;aspect-ratio:9/16;display:block;background:#000;border-radius:12px}.mini-clip b{display:block;font-size:12px;margin:8px 2px 2px}.danger{border:1px solid #ff6f8b55;background:#2a111a;color:#ff98ad;border-radius:12px;padding:10px 12px;font-weight:850;cursor:pointer}.empty{border:1px dashed #58668755;border-radius:22px;padding:36px;text-align:center;color:#8792ac;background:#0b1222}
     .helper{text-align:center;color:#7f8ba5;font-size:12px;margin-top:12px}.trust{margin-top:13px;border-radius:18px;padding:14px 16px;display:flex;gap:12px;align-items:center;color:#9ba7c0;font-size:12px}.shield{width:34px;height:34px;border-radius:12px;background:#334cff22;color:#9bb2ff;display:grid;place-items:center;font-size:18px}
     .process-wrap{max-width:720px;margin:32px auto}.section-title{text-align:center;font-size:30px;margin:14px 0 6px;letter-spacing:-.03em}.section-sub{text-align:center;color:var(--muted);margin:0 0 26px}
     .process-card{border-radius:30px;padding:24px}.file-orbit{min-height:235px;border-radius:24px;border:1px solid #6573c02d;background:radial-gradient(circle at 50% 30%,#774dff32,transparent 38%),#0c1327;display:grid;place-items:center;text-align:center;padding:22px}
@@ -71,7 +71,7 @@ const html = String.raw`<!doctype html>
   <main class="app">
     <header class="topbar">
       <div class="brand"><span class="logo"></span><b>HYDRAREEL</b></div>
-      <span class="status-pill">AI CLIP STUDIO · MVP</span>
+      <div class="nav-actions"><button id="navCreate" class="nav-btn active">Crear</button><button id="navLibrary" class="nav-btn">Mis clips</button></div>
     </header>
 
     <section id="home" class="hero">
@@ -85,15 +85,10 @@ const html = String.raw`<!doctype html>
         <div class="upload-card">
           <div class="visual"><div class="play-glass"></div></div>
           <label id="pick" class="primary file-trigger">
-            <span>▣ &nbsp; Elegir desde Fotos &nbsp; →</span>
-            <input id="file" class="native-file" type="file" accept="video/*">
+            <span>⇧ &nbsp; Seleccionar video &nbsp; →</span>
+            <input id="file" class="native-file" type="file" accept="video/*,.mp4,.mov,.webm">
           </label>
-          <label id="pickFiles" class="primary file-trigger secondary-upload">
-            <span>⌁ &nbsp; Elegir desde Archivos &nbsp; →</span>
-            <input id="fileLocal" class="native-file" type="file" accept=".mp4,.mov,.webm">
-          </label>
-          <div class="helper">MP4, MOV o WEBM · máximo 30 min · un job a la vez</div>
-          <div class="ios-note"><b>iPhone + videos largos:</b> si Fotos muestra un círculo de carga, iOS está descargando o preparando el video desde iCloud. HydraReel empieza apenas Safari recibe el archivo.</div>
+          <div class="helper">MP4, MOV o WEBM · máximo 30 min · HydraReel genera tantos clips buenos como encuentre</div>
         </div>
         <div class="trust"><span class="shield">✓</span><span><b style="color:#d8dff0">Tu archivo va directo a almacenamiento privado.</b><br>HydraReel procesa únicamente el contenido que tú subes.</span></div>
       </div>
@@ -122,17 +117,24 @@ const html = String.raw`<!doctype html>
       <div id="clips" class="clips"></div>
     </section>
 
+    <section id="library" hidden class="library">
+      <div class="result-head"><div><span class="eyebrow">✦ BIBLIOTECA</span><h2 style="margin-top:12px">Mis clips</h2><p>Proyectos generados en este navegador.</p></div></div>
+      <div id="libraryGrid" class="library-grid"></div>
+    </section>
+
     <div id="error" class="error" hidden></div>
     <div class="footer">Procesa únicamente contenido propio o que tengas derecho a utilizar.</div>
   </main>
 
 <script>
-const input=document.getElementById('file'),fileLocal=document.getElementById('fileLocal'),pick=document.getElementById('pick'),pickFiles=document.getElementById('pickFiles'),home=document.getElementById('home'),processing=document.getElementById('processing'),results=document.getElementById('results'),clips=document.getElementById('clips'),err=document.getElementById('error'),ring=document.getElementById('ring'),percent=document.getElementById('percent'),filenameEl=document.getElementById('filename'),uploadMeta=document.getElementById('uploadMeta'),resultCopy=document.getElementById('resultCopy'),again=document.getElementById('again');
+const input=document.getElementById('file'),pick=document.getElementById('pick'),home=document.getElementById('home'),processing=document.getElementById('processing'),results=document.getElementById('results'),library=document.getElementById('library'),libraryGrid=document.getElementById('libraryGrid'),clips=document.getElementById('clips'),err=document.getElementById('error'),ring=document.getElementById('ring'),percent=document.getElementById('percent'),filenameEl=document.getElementById('filename'),uploadMeta=document.getElementById('uploadMeta'),resultCopy=document.getElementById('resultCopy'),again=document.getElementById('again'),navCreate=document.getElementById('navCreate'),navLibrary=document.getElementById('navLibrary');
 let pickerOpenedAt=0;
 let pickerDeliveredFile=false;
 let wakeLock=null;
 let processingActive=false;
 const JOB_KEY='hydrareel-active-job';
+const CLIENT_KEY='hydrareel-client-id';
+function clientId(){let id=localStorage.getItem(CLIENT_KEY);if(!id){id=crypto.randomUUID();localStorage.setItem(CLIENT_KEY,id)}return id}
 
 function formatEta(seconds){if(!Number.isFinite(seconds)||seconds<0)return '';const s=Math.ceil(seconds);const m=Math.floor(s/60);const r=s%60;return m?m+'m '+r+'s':r+'s'}
 async function keepScreenAwake(){processingActive=true;if(!('wakeLock' in navigator)||document.visibilityState!=='visible')return;try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}
@@ -140,20 +142,23 @@ async function releaseScreen(){processingActive=false;try{await wakeLock?.releas
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&processingActive&&!wakeLock)void keepScreenAwake()});
 const order=['UPLOADING','TRANSCRIBING','ANALYZING','RENDERING','COMPLETED'];
 const pct={UPLOADING:12,UPLOADED:23,TRANSCRIBING:42,ANALYZING:67,RENDERING:86,COMPLETED:100,FAILED:100};
-function show(section){home.hidden=section!=='home';processing.hidden=section!=='processing';results.hidden=section!=='results'}
+function show(section){home.hidden=section!=='home';processing.hidden=section!=='processing';results.hidden=section!=='results';library.hidden=section!=='library';navCreate.classList.toggle('active',section==='home'||section==='processing'||section==='results');navLibrary.classList.toggle('active',section==='library')}
 function setProgress(state,value){const p=value??pct[state]??5;ring.style.setProperty('--p',p);percent.textContent=Math.round(p)+'%';const effective=state==='UPLOADED'?'TRANSCRIBING':state;const idx=order.indexOf(effective);document.querySelectorAll('.step').forEach((el,i)=>{el.classList.toggle('active',i===idx);el.classList.toggle('done',i<idx);const dot=el.querySelector('.dot');if(i<idx)dot.textContent='✓'})}
-function setPickerBusy(busy){pick.classList.toggle('busy',busy);pickFiles.classList.toggle('busy',busy);input.disabled=busy;fileLocal.disabled=busy}
+function setPickerBusy(busy){pick.classList.toggle('busy',busy);input.disabled=busy}
 function fail(message){err.hidden=false;err.textContent=message||'No pudimos completar el procesamiento.';localStorage.removeItem(JOB_KEY);void releaseScreen();setPickerBusy(false);show('home')}
 function uploadWithProgress(url,headers,file){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();const started=performance.now();xhr.open('PUT',url);Object.entries(headers||{}).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.max(3,Math.round(e.loaded/e.total*18));setProgress('UPLOADING',p);const elapsed=Math.max(.25,(performance.now()-started)/1000);const bytesPerSecond=e.loaded/elapsed;const speed=bytesPerSecond/1048576;const eta=bytesPerSecond>0?(e.total-e.loaded)/bytesPerSecond:NaN;uploadMeta.textContent=(e.loaded/1048576).toFixed(1)+' MB de '+(e.total/1048576).toFixed(1)+' MB · '+speed.toFixed(1)+' MB/s'+(Number.isFinite(eta)?' · ~'+formatEta(eta):'')}};xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('Upload S3 falló: '+xhr.status));xhr.onerror=()=>reject(new Error('La subida se interrumpió. Verifica tu conexión e intenta de nuevo.'));xhr.send(file)})}
 function addClip(c,total){const card=document.createElement('article');card.className='result-card';const shell=document.createElement('div');shell.className='video-shell';const video=document.createElement('video');video.controls=true;video.preload='metadata';video.src=c.url;const left=document.createElement('span');left.className='badge left';left.textContent='#'+c.index+' de '+total;const right=document.createElement('span');right.className='badge right';right.textContent=Math.round(c.durationSeconds)+'s';shell.append(video,left,right);const details=document.createElement('div');details.className='details';const titleRow=document.createElement('div');titleRow.className='title-row';const h=document.createElement('h3');h.textContent=c.title;const score=document.createElement('span');score.className='score-badge';score.innerHTML='Score <em>'+Math.round(c.score)+'</em>';titleRow.append(h,score);const meta=document.createElement('div');meta.className='meta-row';['◷ '+Math.round(c.durationSeconds)+'s','▣ 9:16','✦ Corte validado'].forEach(t=>{const m=document.createElement('span');m.className='meta';m.textContent=t;meta.appendChild(m)});const why=document.createElement('div');why.className='why';const wb=document.createElement('b');wb.textContent='✦ Por qué este clip';const wp=document.createElement('p');wp.textContent=c.reason;const a=document.createElement('a');a.className='primary download';a.href=c.url;a.download='hydrareel-clip-'+String(c.index).padStart(2,'0')+'.mp4';a.textContent='↓  Descargar clip  →';why.append(wb,wp,a);details.append(titleRow,meta,why);card.append(shell,details);clips.appendChild(card)}
 function render(job){clips.innerHTML='';const list=job.clips||[];resultCopy.textContent=list.length===1?'Encontramos 1 momento con sentido completo.':'Encontramos '+list.length+' momentos con sentido completo.';list.forEach(c=>addClip(c,list.length));show('results')}
 async function poll(id){for(;;){await new Promise(r=>setTimeout(r,2200));const r=await fetch('/api/jobs/'+id);if(!r.ok){if(r.status===404){fail('El procesamiento anterior ya no está disponible. Vuelve a subir el video.');return}throw new Error('No pudimos consultar el estado del procesamiento')}const j=await r.json();setProgress(j.status);uploadMeta.textContent=j.status==='TRANSCRIBING'?'Transcribiendo el audio completo…':j.status==='ANALYZING'?'La IA está revisando sentido, inicio y cierre…':j.status==='RENDERING'?'Renderizando solo los mejores fragmentos…':j.status;if(j.status==='FAILED'){fail(j.error||'Job falló');return}if(j.status==='COMPLETED'){localStorage.removeItem(JOB_KEY);await releaseScreen();render(j);setPickerBusy(false);return}}}
-async function handleSelectedFile(f,source){if(!f)return;pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);filenameEl.textContent=f.name;show('processing');setProgress('UPLOADING',3);void keepScreenAwake();const sizeMb=f.size/1048576;uploadMeta.textContent=(source==='files'?'Archivo local recibido':'Video recibido')+' · '+sizeMb.toFixed(1)+' MB · preparando subida…';await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));try{const r=await fetch('/api/jobs/upload-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName:f.name,contentType:f.type||'application/octet-stream'})});if(!r.ok)throw new Error(await r.text());const u=await r.json();await uploadWithProgress(u.uploadUrl,u.headers,f);setProgress('UPLOADED',22);uploadMeta.textContent='Upload completo · iniciando procesamiento…';localStorage.setItem(JOB_KEY,u.jobId);const p=await fetch('/api/jobs/'+u.jobId+'/uploaded',{method:'POST'});if(!p.ok)throw new Error(await p.text());await poll(u.jobId)}catch(e){fail(e.message||String(e))}}
-again.onclick=()=>{input.value='';fileLocal.value='';pickerDeliveredFile=false;err.hidden=true;localStorage.removeItem(JOB_KEY);void releaseScreen();setPickerBusy(false);show('home')};
+async function handleSelectedFile(f){if(!f)return;pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);filenameEl.textContent=f.name;show('processing');setProgress('UPLOADING',3);void keepScreenAwake();const sizeMb=f.size/1048576;uploadMeta.textContent='Video recibido · '+sizeMb.toFixed(1)+' MB · preparando subida…';await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));try{const r=await fetch('/api/jobs/upload-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName:f.name,contentType:f.type||'application/octet-stream',clientId:clientId()})});if(!r.ok)throw new Error(await r.text());const u=await r.json();await uploadWithProgress(u.uploadUrl,u.headers,f);setProgress('UPLOADED',22);uploadMeta.textContent='Upload completo · iniciando procesamiento…';localStorage.setItem(JOB_KEY,u.jobId);const p=await fetch('/api/jobs/'+u.jobId+'/uploaded',{method:'POST'});if(!p.ok)throw new Error(await p.text());await poll(u.jobId)}catch(e){fail(e.message||String(e))}}
+again.onclick=()=>{input.value='';pickerDeliveredFile=false;err.hidden=true;localStorage.removeItem(JOB_KEY);void releaseScreen();setPickerBusy(false);show('home')};
 input.addEventListener('click',()=>{pickerOpenedAt=Date.now();pickerDeliveredFile=false;err.hidden=true});
-window.addEventListener('focus',()=>{setTimeout(()=>{if(pickerOpenedAt&&Date.now()-pickerOpenedAt>500&&!pickerDeliveredFile&&!(input.files&&input.files.length)){err.hidden=false;err.textContent='Fotos todavía está preparando el video. Para videos largos, usa “Elegir desde Archivos”: en Fotos toca Compartir → Guardar en Archivos y luego súbelo desde ahí.'}},900)});
-input.addEventListener('change',()=>handleSelectedFile(input.files&&input.files[0],'photos'));
-fileLocal.addEventListener('change',()=>handleSelectedFile(fileLocal.files&&fileLocal.files[0],'files'));
+input.addEventListener('change',()=>handleSelectedFile(input.files&&input.files[0]));
+
+function formatDate(value){try{return new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))}catch{return value}}
+async function loadLibrary(){show('library');libraryGrid.innerHTML='<div class="empty">Cargando tus clips…</div>';try{const r=await fetch('/api/library',{headers:{'x-hydra-client-id':clientId()}});if(!r.ok)throw new Error('No pudimos cargar tu biblioteca');const projects=await r.json();libraryGrid.innerHTML='';if(!projects.length){libraryGrid.innerHTML='<div class="empty"><b>Aún no tienes clips guardados.</b><br>Genera tu primer proyecto y aparecerá aquí.</div>';return}for(const p of projects){const card=document.createElement('article');card.className='project-card';const head=document.createElement('div');head.className='project-head';const info=document.createElement('div');const name=document.createElement('div');name.className='project-name';name.textContent=p.originalFileName;const meta=document.createElement('div');meta.className='project-meta';meta.textContent=formatDate(p.completedAt)+' · '+Math.round((p.sourceDuration||0)/60)+' min · '+p.clips.length+' clips';info.append(name,meta);const del=document.createElement('button');del.className='danger';del.textContent='Borrar';del.onclick=async()=>{if(!confirm('¿Eliminar este proyecto y todos sus clips? Esta acción no se puede deshacer.'))return;del.disabled=true;const dr=await fetch('/api/library/'+p.id,{method:'DELETE',headers:{'x-hydra-client-id':clientId()}});if(!dr.ok){del.disabled=false;alert('No pudimos borrar el proyecto.');return}card.remove();if(!libraryGrid.children.length)libraryGrid.innerHTML='<div class="empty">No tienes clips guardados.</div>'};head.append(info,del);const grid=document.createElement('div');grid.className='project-clips';for(const clip of p.clips){const item=document.createElement('div');item.className='mini-clip';const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=clip.url;const t=document.createElement('b');t.textContent=clip.title;const a=document.createElement('a');a.href=clip.url;a.download='hydrareel-clip-'+String(clip.index).padStart(2,'0')+'.mp4';a.className='secondary download';a.textContent='Descargar';item.append(v,t,a);grid.append(item)}card.append(head,grid);libraryGrid.append(card)}}catch(e){libraryGrid.innerHTML='<div class="empty">'+(e.message||'No pudimos cargar tu biblioteca')+'</div>'}}
+navCreate.onclick=()=>show('home');
+navLibrary.onclick=()=>void loadLibrary();
 
 (async()=>{const id=localStorage.getItem(JOB_KEY);if(!id)return;try{const r=await fetch('/api/jobs/'+id);if(!r.ok){localStorage.removeItem(JOB_KEY);return}const j=await r.json();if(j.status==='COMPLETED'){localStorage.removeItem(JOB_KEY);render(j);return}if(j.status==='FAILED'){localStorage.removeItem(JOB_KEY);return}filenameEl.textContent=j.originalFileName||'Video en proceso';show('processing');setPickerBusy(true);setProgress(j.status);uploadMeta.textContent='Retomando procesamiento…';void keepScreenAwake();void poll(id)}catch{}})();
 </script>
