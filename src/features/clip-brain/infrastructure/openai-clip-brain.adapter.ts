@@ -14,6 +14,40 @@ function outputText(data: any): string {
   throw new Error('OpenAI response no contiene output_text');
 }
 
+function wordSafeBounds(
+  transcript: Transcript,
+  startSegmentIndex: number,
+  endSegmentIndex: number,
+): { startSeconds: number; endSeconds: number } | undefined {
+  const startSegment = transcript.segments[startSegmentIndex];
+  const endSegment = transcript.segments[endSegmentIndex];
+  if (!startSegment || !endSegment || startSegmentIndex > endSegmentIndex) return undefined;
+
+  const words = transcript.words.filter(
+    (word) => word.end > startSegment.start - 0.05 && word.start < endSegment.end + 0.2,
+  );
+  if (!words.length) {
+    return {
+      startSeconds: Math.max(0, startSegment.start - 0.08),
+      endSeconds: Math.min(transcript.duration, endSegment.end + 0.12),
+    };
+  }
+
+  const first = words[0];
+  const last = words.at(-1)!;
+  const lastIndex = transcript.words.findIndex(
+    (word) => word.start === last.start && word.end === last.end && word.word === last.word,
+  );
+  const next = lastIndex >= 0 ? transcript.words[lastIndex + 1] : undefined;
+  const gapAfter = next ? Math.max(0, next.start - last.end) : 0.4;
+  const tail = gapAfter >= 0.25 ? Math.min(0.32, gapAfter * 0.6) : 0.08;
+
+  return {
+    startSeconds: Math.max(0, Math.min(startSegment.start, first.start) - 0.08),
+    endSeconds: Math.min(transcript.duration, Math.max(endSegment.end, last.end) + tail),
+  };
+}
+
 @Injectable()
 export class OpenAiClipBrainAdapter implements ClipBrainPort {
   constructor(@Inject(CONFIG) private readonly config: HydraConfig) {}
@@ -142,12 +176,11 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const reviewed: ClipCandidate[] = [];
     for (const item of parsed.clips ?? []) {
       const original = clips[item.candidateIndex];
-      const startSegment = transcript.segments[item.startSegmentIndex];
-      const endSegment = transcript.segments[item.endSegmentIndex];
-      if (!original || !item.approved || !startSegment || !endSegment || item.startSegmentIndex > item.endSegmentIndex) continue;
+      const bounds = wordSafeBounds(transcript, item.startSegmentIndex, item.endSegmentIndex);
+      if (!original || !item.approved || !bounds) continue;
       reviewed.push({
-        startSeconds: startSegment.start,
-        endSeconds: endSegment.end,
+        startSeconds: bounds.startSeconds,
+        endSeconds: bounds.endSeconds,
         title: String(item.title || original.title),
         hook: original.hook,
         reason: String(item.reason || original.reason),
