@@ -38,6 +38,15 @@ export class LibraryController {
     return this.transcriptCorrection.update(clientId, jobId, body.text);
   }
 
+  @Get(':jobId/clips/:clipIndex/download')
+  downloadClip(
+    @Headers('x-hydra-client-id') clientId: string | undefined,
+    @Param('jobId') jobId: string,
+    @Param('clipIndex') clipIndex: string,
+  ) {
+    return this.library.download(clientId, jobId, clipIndex);
+  }
+
   @Get(':jobId/clips/:clipIndex/transcript')
   clipTranscript(
     @Headers('x-hydra-client-id') clientId: string | undefined,
