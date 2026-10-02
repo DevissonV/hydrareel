@@ -9,8 +9,17 @@ export const clipCandidateSchema = z.object({
   score: z.number().min(0).max(100),
 });
 
-export const clipSelectionSchema = z.object({ clips: z.array(clipCandidateSchema).max(3) });
+export const clipSelectionSchema = z.object({ clips: z.array(clipCandidateSchema) });
 export type ClipCandidate = z.infer<typeof clipCandidateSchema>;
+
+export function maxClipsForDuration(
+  durationSeconds: number,
+  minClipSeconds: number,
+  configuredMaxClips: number,
+): number {
+  if (!Number.isFinite(durationSeconds) || durationSeconds < minClipSeconds) return 0;
+  return Math.max(0, Math.min(configuredMaxClips, Math.floor(durationSeconds / minClipSeconds)));
+}
 
 export function validateAndNormalizeCandidates(
   raw: unknown,
