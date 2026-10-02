@@ -113,8 +113,7 @@ export class ProcessJobUseCase {
       }
       job.timings.renderDurationMs = Date.now() - r0;
       job.timings.totalDurationMs = Date.now() - started;
-      job.transition('COMPLETED');
-      await this.jobs.save(job);
+      const completedAt = new Date().toISOString();
       await this.storage.putJson(`clients/${job.clientId}/jobs/${job.id}.json`, {
         id: job.id,
         clientId: job.clientId,
@@ -122,9 +121,11 @@ export class ProcessJobUseCase {
         sourceKey: job.sourceKey,
         sourceDuration: job.sourceDuration,
         createdAt: job.createdAt.toISOString(),
-        completedAt: job.updatedAt.toISOString(),
+        completedAt,
         clips: job.clips,
       });
+      job.transition('COMPLETED');
+      await this.jobs.save(job);
       jobLog(job.id, 'job_completed', {
         sourceDuration: job.sourceDuration,
         ...job.timings,
