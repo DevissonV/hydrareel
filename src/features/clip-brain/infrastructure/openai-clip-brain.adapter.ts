@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CONFIG, HydraConfig } from '../../../config';
 import { ClipBrainPort, ClipBrainResult } from '../application/clip-brain.port';
-import { maxClipsForDuration, validateAndNormalizeCandidates } from '../domain/clip-candidate';
+import { clipPolicyForDuration, ClipCandidate, validateAndNormalizeCandidates } from '../domain/clip-candidate';
 import { Transcript } from '../../transcription/domain/transcript';
 
 function outputText(data: any): string {
@@ -18,26 +18,48 @@ function outputText(data: any): string {
 export class OpenAiClipBrainAdapter implements ClipBrainPort {
   constructor(@Inject(CONFIG) private readonly config: HydraConfig) {}
 
+  private async structured(name: string, schema: unknown, system: string, payload: unknown) {
+    const response = await fetch(`${this.config.openaiBaseUrl}/responses`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.config.openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.config.openaiClipModel,
+        reasoning: { effort: 'low' },
+        input: [
+          { role: 'system', content: system },
+          { role: 'user', content: JSON.stringify(payload) },
+        ],
+        text: { format: { type: 'json_schema', name, strict: true, schema } },
+      }),
+    });
+    const body = await response.text();
+    if (!response.ok) throw new Error(`OpenAI Clip Brain HTTP ${response.status}: ${body.slice(0, 1200)}`);
+    const data = JSON.parse(body);
+    return { parsed: JSON.parse(outputText(data)), usage: data.usage };
+  }
+
   async select(transcript: Transcript): Promise<ClipBrainResult> {
     if (!this.config.openaiApiKey) throw new Error('OPENAI_API_KEY no está configurada');
 
-    const maxClips = maxClipsForDuration(
+    const policy = clipPolicyForDuration(
       transcript.duration,
       this.config.minClipSeconds,
+      this.config.maxClipSeconds,
       this.config.maxClipsPerJob,
     );
-    if (maxClips === 0) {
-      throw new Error(`El video debe durar al menos ${this.config.minClipSeconds} segundos para generar un clip`);
-    }
+    if (policy.maxClips === 0) throw new Error('El video es demasiado corto para generar un clip útil');
 
-    const timeline = transcript.segments.map((s) => ({ start: s.start, end: s.end, text: s.text }));
+    const timeline = transcript.segments.map((s, index) => ({ index, start: s.start, end: s.end, text: s.text }));
     const schema = {
       type: 'object',
       additionalProperties: false,
       required: ['clips'],
       properties: {
         clips: {
-          type: 'array', minItems: 1, maxItems: maxClips,
+          type: 'array', minItems: 1, maxItems: policy.maxClips,
           items: {
             type: 'object', additionalProperties: false,
             required: ['startSeconds', 'endSeconds', 'title', 'hook', 'reason', 'score'],
@@ -54,40 +76,93 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       },
     };
 
-    const response = await fetch(`${this.config.openaiBaseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.config.openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: this.config.openaiClipModel,
-        reasoning: { effort: 'low' },
-        input: [
-          {
-            role: 'system',
-            content: `Eres Clip Brain V0 de HydraReel. Selecciona entre 1 y ${maxClips} momentos fuertes de una transcripción. No rellenes una cuota: si solo existe 1 momento realmente bueno, devuelve 1; si hay 2, devuelve 2. Cada clip debe durar entre ${this.config.minClipSeconds} y ${this.config.maxClipSeconds} segundos. Usa únicamente timestamps reales presentes en la línea de tiempo. No cortes una frase por la mitad; cada clip debe entenderse sin contexto previo. Favorece hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita saludos, intros, patrocinadores, silencios y solapamientos. El score es una heurística editorial 0-100, nunca una probabilidad de viralidad.`,
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({ duration: transcript.duration, maxClips, timeline }),
-          },
-        ],
-        text: { format: { type: 'json_schema', name: 'hydrareel_clips', strict: true, schema } },
-      }),
-    });
-    const body = await response.text();
-    if (!response.ok) throw new Error(`OpenAI clip brain HTTP ${response.status}: ${body.slice(0, 1200)}`);
-    const data = JSON.parse(body);
-    const raw = JSON.parse(outputText(data));
+    const { parsed, usage } = await this.structured(
+      'hydrareel_clips',
+      schema,
+      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
+      { duration: transcript.duration, policy, timeline },
+    );
+
     const clips = validateAndNormalizeCandidates(
-      raw,
-      this.config.minClipSeconds,
-      this.config.maxClipSeconds,
+      parsed,
+      policy.minSeconds,
+      policy.maxSeconds,
       transcript.duration,
-      maxClips,
+      policy.maxClips,
     );
     if (!clips.length) throw new Error('Clip Brain no produjo candidatos válidos');
-    return { clips, usage: data.usage };
+    return { clips, usage };
+  }
+
+  async review(transcript: Transcript, clips: ClipCandidate[]): Promise<ClipBrainResult> {
+    if (!clips.length) return { clips: [] };
+
+    const policy = clipPolicyForDuration(
+      transcript.duration,
+      this.config.minClipSeconds,
+      this.config.maxClipSeconds,
+      this.config.maxClipsPerJob,
+    );
+    const timeline = transcript.segments.map((s, index) => ({ index, start: s.start, end: s.end, text: s.text }));
+
+    const schema = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['clips'],
+      properties: {
+        clips: {
+          type: 'array',
+          minItems: clips.length,
+          maxItems: clips.length,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['candidateIndex', 'approved', 'startSegmentIndex', 'endSegmentIndex', 'title', 'reason', 'score'],
+            properties: {
+              candidateIndex: { type: 'integer', minimum: 0 },
+              approved: { type: 'boolean' },
+              startSegmentIndex: { type: 'integer', minimum: 0 },
+              endSegmentIndex: { type: 'integer', minimum: 0 },
+              title: { type: 'string' },
+              reason: { type: 'string' },
+              score: { type: 'number', minimum: 0, maximum: 100 },
+            },
+          },
+        },
+      },
+    };
+
+    const { parsed, usage } = await this.structured(
+      'hydrareel_editorial_qa',
+      schema,
+      `Eres el control editorial final de HydraReel. Antes de renderizar, revisa cada candidato como si fueras un editor humano exigente. Un clip solo se aprueba si: (1) se entiende solo, (2) no empieza a mitad de una idea dependiente de contexto anterior, (3) no termina a mitad de una frase, pensamiento o payoff, y (4) tiene un cierre natural. Puedes mover el inicio y el final únicamente usando índices de segmentos reales de la transcripción. Ajusta a los límites naturales más cercanos aunque el clip quede más corto o largo, siempre dentro de ${policy.minSeconds}-${policy.maxSeconds}s. Si no puede quedar coherente, approved=false. Devuelve una entrada por cada candidato.`,
+      { duration: transcript.duration, policy, candidates: clips, timeline },
+    );
+
+    const reviewed: ClipCandidate[] = [];
+    for (const item of parsed.clips ?? []) {
+      const original = clips[item.candidateIndex];
+      const startSegment = transcript.segments[item.startSegmentIndex];
+      const endSegment = transcript.segments[item.endSegmentIndex];
+      if (!original || !item.approved || !startSegment || !endSegment || item.startSegmentIndex > item.endSegmentIndex) continue;
+      reviewed.push({
+        startSeconds: startSegment.start,
+        endSeconds: endSegment.end,
+        title: String(item.title || original.title),
+        hook: original.hook,
+        reason: String(item.reason || original.reason),
+        score: Number(item.score ?? original.score),
+      });
+    }
+
+    const normalized = validateAndNormalizeCandidates(
+      { clips: reviewed },
+      policy.minSeconds,
+      policy.maxSeconds,
+      transcript.duration,
+      policy.maxClips,
+    );
+    if (!normalized.length) throw new Error('La revisión editorial no encontró un corte completo y coherente');
+    return { clips: normalized, usage };
   }
 }
