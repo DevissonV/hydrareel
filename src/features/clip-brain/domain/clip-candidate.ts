@@ -46,9 +46,15 @@ export function clipPolicyForDuration(
     maxSeconds = Math.min(configuredMaxSeconds, durationSeconds);
   }
 
+  const durationCap =
+    durationSeconds < 180 ? 3 :
+    durationSeconds < 480 ? 4 :
+    durationSeconds < 900 ? 6 :
+    10;
+
   const maxClips = Math.max(
     1,
-    Math.min(configuredMaxClips, Math.floor(durationSeconds / Math.max(minSeconds, 1))),
+    Math.min(configuredMaxClips, durationCap, Math.floor(durationSeconds / Math.max(minSeconds, 1))),
   );
 
   return { minSeconds, maxSeconds, maxClips };
