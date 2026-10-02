@@ -44,6 +44,20 @@ export class RailwayS3Adapter implements ObjectStoragePort {
     );
   }
 
+  async createAttachmentUrl(key: string, fileName: string): Promise<string> {
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]+/g, '-');
+    return getSignedUrl(
+      this.s3,
+      new GetObjectCommand({
+        Bucket: this.config.bucketName,
+        Key: key,
+        ResponseContentType: 'video/mp4',
+        ResponseContentDisposition: `attachment; filename="${safeName}"`,
+      }),
+      { expiresIn: this.config.presignedUrlTtlSeconds },
+    );
+  }
+
   async downloadToFile(key: string, destination: string): Promise<void> {
     const result = await this.s3.send(new GetObjectCommand({ Bucket: this.config.bucketName, Key: key }));
     if (!result.Body) throw new Error('Storage object has no body');
