@@ -321,7 +321,7 @@ export function buildRenderArgs(
   }
 
   filters.push(`[punch]subtitles='${escapeSubtitlePath(subtitlesPath)}'[v]`);
-  filters.push('[basea]highpass=f=70,acompressor=threshold=0.10:ratio=2.4:attack=20:release=250:makeup=1.35,loudnorm=I=-16:TP=-1.5:LRA=11[a]');
+  filters.push('[basea]aresample=async=1:first_pts=0,highpass=f=70,acompressor=threshold=0.10:ratio=2.4:attack=20:release=250:makeup=1.35,loudnorm=I=-16:TP=-1.5:LRA=11[a]');
 
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
