@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { createWriteStream, createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import {
+  DeleteObjectsCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -65,6 +66,44 @@ export class RailwayS3Adapter implements ObjectStoragePort {
       Body: JSON.stringify(value, null, 2),
       ContentType: 'application/json',
     }));
+  }
+
+  async getJson<T>(key: string): Promise<T> {
+    const result = await this.s3.send(new GetObjectCommand({ Bucket: this.config.bucketName, Key: key }));
+    if (!result.Body) throw new Error('Storage object has no body');
+    return JSON.parse(await result.Body.transformToString()) as T;
+  }
+
+  async listKeys(prefix: string): Promise<string[]> {
+    const keys: string[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const result = await this.s3.send(new ListObjectsV2Command({
+        Bucket: this.config.bucketName,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }));
+      for (const object of result.Contents ?? []) if (object.Key) keys.push(object.Key);
+      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return keys;
+  }
+
+  async deleteKeys(keys: string[]): Promise<void> {
+    for (let i = 0; i < keys.length; i += 1000) {
+      const batch = keys.slice(i, i + 1000);
+      if (!batch.length) continue;
+      await this.s3.send(new DeleteObjectsCommand({
+        Bucket: this.config.bucketName,
+        Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+      }));
+    }
+  }
+
+  async deletePrefix(prefix: string): Promise<number> {
+    const keys = await this.listKeys(prefix);
+    await this.deleteKeys(keys);
+    return keys.length;
   }
 
   async health(): Promise<boolean> {
