@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { OBJECT_STORAGE, ObjectStoragePort } from '../../storage/application/object-storage.port';
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
 import { JobClip } from '../domain/job.entity';
+import { normalizeProjectMetrics, ProjectMetrics } from '../domain/project-metrics';
 
 interface LibraryManifest {
   id: string;
@@ -12,6 +13,7 @@ interface LibraryManifest {
   createdAt: string;
   completedAt: string;
   processingDurationMs?: number;
+  metrics?: ProjectMetrics;
   clips: JobClip[];
 }
 
@@ -55,6 +57,7 @@ export class LibraryUseCase {
       updatedAt: string;
       completedAt?: string;
       processingDurationMs?: number;
+      metrics?: ProjectMetrics;
       clips: JobClip[];
       error?: string;
     }>();
@@ -70,6 +73,7 @@ export class LibraryUseCase {
         updatedAt: job.updatedAt.toISOString(),
         completedAt: manifest?.completedAt,
         processingDurationMs: job.timings.totalDurationMs ?? manifest?.processingDurationMs,
+        metrics: manifest?.metrics,
         clips: job.clips.length ? job.clips : manifest?.clips ?? [],
         error: job.error,
       });
@@ -86,6 +90,7 @@ export class LibraryUseCase {
         updatedAt: manifest.completedAt,
         completedAt: manifest.completedAt,
         processingDurationMs: manifest.processingDurationMs,
+        metrics: manifest.metrics,
         clips: manifest.clips,
       });
     }
@@ -101,6 +106,84 @@ export class LibraryUseCase {
           }))),
         })),
     );
+  }
+
+  async metrics(rawClientId?: string) {
+    const clientId = assertUuid(rawClientId, 'clientId');
+    const [states, manifestKeys] = await Promise.all([
+      this.jobs.listByClient(clientId),
+      this.storage.listKeys(`clients/${clientId}/jobs/`),
+    ]);
+
+    const manifests: LibraryManifest[] = [];
+    for (const key of manifestKeys.filter((key) => key.endsWith('.json'))) {
+      try {
+        const manifest = await this.storage.getJson<LibraryManifest>(key);
+        if (manifest.clientId === clientId) manifests.push(manifest);
+      } catch {
+        // Ignore damaged historical data.
+      }
+    }
+
+    let originalSeconds = 0;
+    let readySeconds = 0;
+    let processingMs = 0;
+    let processingSamples = 0;
+    let clips = 0;
+    let transcriptCorrectionSaves = 0;
+    let transcriptWordsCorrected = 0;
+    let clipsUpdatedFromTranscript = 0;
+    let regenerationSucceeded = 0;
+    let regenerationFailed = 0;
+    let regenerationDurationMs = 0;
+    const regenerationRequests = { shorter: 0, longer: 0, alternative: 0, restyle: 0 };
+
+    for (const manifest of manifests) {
+      originalSeconds += Number(manifest.sourceDuration ?? 0);
+      const currentClips = manifest.clips ?? [];
+      clips += currentClips.length;
+      readySeconds += currentClips.reduce((sum, clip) => sum + Number(clip.durationSeconds || 0), 0);
+      const m = normalizeProjectMetrics(manifest.metrics);
+      const duration = Number(manifest.processingDurationMs ?? m.initialProcessingDurationMs ?? 0);
+      if (duration > 0) {
+        processingMs += duration;
+        processingSamples += 1;
+      }
+      transcriptCorrectionSaves += m.transcriptCorrectionSaves;
+      transcriptWordsCorrected += m.transcriptWordsCorrected;
+      clipsUpdatedFromTranscript += m.clipsUpdatedFromTranscript;
+      regenerationSucceeded += m.regenerationSucceeded;
+      regenerationFailed += m.regenerationFailed;
+      regenerationDurationMs += m.regenerationDurationMs;
+      regenerationRequests.shorter += m.regenerationRequests.shorter;
+      regenerationRequests.longer += m.regenerationRequests.longer;
+      regenerationRequests.alternative += m.regenerationRequests.alternative;
+      regenerationRequests.restyle += m.regenerationRequests.restyle;
+    }
+
+    return {
+      projectsCompleted: manifests.length,
+      projectsFailed: states.filter((job) => job.status === 'FAILED').length,
+      originalSeconds: Number(originalSeconds.toFixed(3)),
+      clipsGenerated: clips,
+      readySeconds: Number(readySeconds.toFixed(3)),
+      averageProcessingSeconds: processingSamples
+        ? Number((processingMs / processingSamples / 1000).toFixed(2))
+        : 0,
+      transcriptCorrectionSaves,
+      transcriptWordsCorrected,
+      clipsUpdatedFromTranscript,
+      regenerationRequests,
+      regenerationSucceeded,
+      regenerationFailed,
+      regenerationSuccessRate:
+        regenerationSucceeded + regenerationFailed > 0
+          ? Number((regenerationSucceeded / (regenerationSucceeded + regenerationFailed)).toFixed(4))
+          : null,
+      averageRegenerationSeconds: regenerationSucceeded + regenerationFailed > 0
+        ? Number((regenerationDurationMs / (regenerationSucceeded + regenerationFailed) / 1000).toFixed(2))
+        : 0,
+    };
   }
 
   async delete(rawClientId: string | undefined, rawJobId: string) {
