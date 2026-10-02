@@ -48,7 +48,9 @@ export class FfmpegMediaAdapter implements MediaPort {
     await run('ffmpeg', [
       '-hide_banner', '-loglevel', 'error', '-y',
       '-i', source,
-      '-vn', '-ac', '1', '-ar', '16000',
+      '-vn',
+      '-af', 'aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS',
+      '-ac', '1', '-ar', '16000',
       '-c:a', 'libmp3lame', '-b:a', '64k',
       destination,
     ]);
