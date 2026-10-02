@@ -190,6 +190,26 @@ function fail(message){err.hidden=false;err.textContent=friendlyError(message);l
 function uploadWithProgress(url,headers,file){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();const started=performance.now();xhr.open('PUT',url);Object.entries(headers||{}).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.max(3,Math.round(e.loaded/e.total*18));setProgress('UPLOADING',p);const elapsed=Math.max(.25,(performance.now()-started)/1000);const bytesPerSecond=e.loaded/elapsed;const speed=bytesPerSecond/1048576;const eta=bytesPerSecond>0?(e.total-e.loaded)/bytesPerSecond:NaN;uploadMeta.textContent=(e.loaded/1048576).toFixed(1)+' MB de '+(e.total/1048576).toFixed(1)+' MB · '+speed.toFixed(1)+' MB/s'+(Number.isFinite(eta)?' · ~'+formatEta(eta):'')}};xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('Upload S3 falló: '+xhr.status));xhr.onerror=()=>reject(new Error('La subida se interrumpió. Verifica tu conexión e intenta de nuevo.'));xhr.send(file)})}
 function packText(c){const tags=(c.hashtags||[]).join(' ');return [c.socialCaption||'',tags].filter(Boolean).join('\n\n')}
 async function copyPack(c,button){try{await navigator.clipboard.writeText(packText(c));const old=button.textContent;button.textContent='✓ Copiado';setTimeout(()=>button.textContent=old,1200)}catch{alert('No pudimos copiar el texto.')}}
+async function downloadClip(jobId,c,button){
+  if(!jobId){alert('Este clip aún no está disponible para descargar.');return}
+  const old=button.textContent;
+  button.disabled=true;
+  button.textContent='Preparando descarga…';
+  try{
+    const r=await fetch('/api/library/'+jobId+'/clips/'+c.index+'/download',{headers:{'x-hydra-client-id':clientId()}});
+    if(!r.ok)throw new Error('No pudimos preparar la descarga.');
+    const data=await r.json();
+    if(!data.url)throw new Error('No pudimos preparar la descarga.');
+    window.location.assign(data.url);
+    button.textContent='✓ Descarga iniciada';
+    setTimeout(()=>button.textContent=old,1400);
+  }catch(e){
+    button.textContent=old;
+    alert(friendlyError(e.message||e));
+  }finally{
+    button.disabled=false;
+  }
+}
 async function libraryProject(jobId){try{const r=await fetch('/api/library',{headers:{'x-hydra-client-id':clientId()}});if(!r.ok)return null;const projects=await r.json();return projects.find(p=>p.id===jobId)||null}catch{return null}}
 async function waitForClipChanges(jobId,oldKeys,expected,timeoutMs=180000){const started=Date.now();while(Date.now()-started<timeoutMs){await new Promise(r=>setTimeout(r,3000));const p=await libraryProject(jobId);if(!p)continue;const changedClips=(p.clips||[]).filter(clip=>oldKeys[String(clip.index)]&&oldKeys[String(clip.index)]!==clip.key);if(changedClips.length>=expected){for(const clip of changedClips)clipUiState.set(clipUiKey(jobId,clip.index),{type:'done',text:'✓ Video actualizado'});if(currentSection==='library')await loadLibrary();else if(currentSection==='results')openLibraryProject(p);for(const clip of changedClips)setTimeout(()=>setClipUiState(jobId,clip.index,null,''),3500);return p}}return null}
 let transcriptContext=null;
@@ -278,7 +298,7 @@ const details=document.createElement('div');details.className='details';const cl
 const meta=document.createElement('div');meta.className='meta-row';['◷ '+Math.round(c.durationSeconds)+'s','▣ 9:16','Aa Captions semánticos'].forEach(t=>{const m=document.createElement('span');m.className='meta';m.textContent=t;meta.appendChild(m)});
 const me=c.magicEdit||{};const magic=document.createElement('div');magic.className='magic-summary';const ms=document.createElement('strong');ms.textContent='✦ Edición aplicada automáticamente';const mv=document.createElement('span');const facts=[];if((me.silenceCuts||0)>0)facts.push(me.silenceCuts+' pausas ajustadas'+((me.removedSeconds||0)>.2?' · '+Number(me.removedSeconds).toFixed(1)+'s eliminados':''));if((me.punchIns||0)>0)facts.push(me.punchIns+' énfasis de cámara');if((c.emphasisTerms||[]).length)facts.push((c.emphasisTerms||[]).length+' conceptos destacados');facts.push('voz + color optimizados');mv.textContent=facts.join(' · ');magic.append(ms,mv);
 const pack=document.createElement('div');pack.className='publish-pack';const packTop=document.createElement('div');packTop.className='pack-top';const packLabel=document.createElement('span');packLabel.className='pack-label';packLabel.textContent='PUBLICACIÓN PREPARADA';const copy=document.createElement('button');copy.className='copy-pack';copy.textContent='Copiar publicación';copy.onclick=()=>copyPack(c,copy);packTop.append(packLabel,copy);const hook=document.createElement('div');hook.className='hook-line';hook.textContent='“'+(c.hook||c.title)+'”';const caption=document.createElement('div');caption.className='caption-copy';caption.textContent=c.socialCaption||c.reason;const tags=document.createElement('div');tags.className='hashtags';tags.textContent=(c.hashtags||[]).join(' ');pack.append(packTop,hook,caption,tags);
-const download=document.createElement('a');download.className='primary download';download.href=c.url;download.download='hydrareel-clip-'+String(c.index).padStart(2,'0')+'.mp4';download.textContent='↓ Descargar clip listo';
+const download=document.createElement('button');download.className='primary download';download.type='button';download.textContent='↓ Descargar clip listo';download.onclick=()=>void downloadClip(jobId,c,download);
 const correct=document.createElement('button');correct.className='secondary';correct.textContent='✎ Corregir texto';correct.onclick=()=>void openClipTranscriptEditor(jobId,c);
 const refine=document.createElement('details');refine.className='refine';const summary=document.createElement('summary');summary.textContent='Quiero ajustar este clip';const actions=document.createElement('div');actions.className='clip-actions';[['Más corto','shorter'],['Más largo','longer'],['Otro momento','alternative'],['Cambiar estilo','restyle']].forEach(([label,mode])=>{const b=document.createElement('button');b.className='clip-action';b.textContent=label;b.onclick=()=>regenerateClip(jobId,c,mode,b);actions.appendChild(b)});refine.append(summary,actions);
 const editorial=document.createElement('details');editorial.className='editorial-note';const es=document.createElement('summary');es.textContent='Por qué Hydra eligió este momento';const ep=document.createElement('p');ep.textContent=c.reason;editorial.append(es,ep);
