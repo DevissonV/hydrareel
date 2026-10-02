@@ -38,9 +38,26 @@ export interface JobUsage {
   analysis?: unknown;
 }
 
+export interface JobSnapshot {
+  id: string;
+  originalFileName: string;
+  sourceKey: string;
+  contentType: string;
+  clientId: string;
+  createdAt: string;
+  updatedAt: string;
+  status: JobStatus;
+  sourceDuration?: number;
+  failureStage?: string;
+  error?: string;
+  clips: JobClip[];
+  timings: JobTimings;
+  usage: JobUsage;
+}
+
 export class Job {
-  readonly createdAt = new Date();
-  updatedAt = new Date();
+  readonly createdAt: Date;
+  updatedAt: Date;
   status: JobStatus = 'UPLOADING';
   sourceDuration?: number;
   failureStage?: string;
@@ -55,7 +72,11 @@ export class Job {
     readonly sourceKey: string,
     readonly contentType: string,
     readonly clientId: string,
-  ) {}
+    createdAt = new Date(),
+  ) {
+    this.createdAt = createdAt;
+    this.updatedAt = new Date(createdAt);
+  }
 
   transition(next: JobStatus): void {
     assertTransition(this.status, next);
@@ -68,5 +89,52 @@ export class Job {
     this.failureStage = stage;
     this.error = message;
     this.updatedAt = new Date();
+  }
+
+  recoverForRetry(): void {
+    this.status = 'UPLOADED';
+    this.failureStage = undefined;
+    this.error = undefined;
+    this.clips = [];
+    this.updatedAt = new Date();
+  }
+
+  toSnapshot(): JobSnapshot {
+    return {
+      id: this.id,
+      originalFileName: this.originalFileName,
+      sourceKey: this.sourceKey,
+      contentType: this.contentType,
+      clientId: this.clientId,
+      createdAt: this.createdAt.toISOString(),
+      updatedAt: this.updatedAt.toISOString(),
+      status: this.status,
+      sourceDuration: this.sourceDuration,
+      failureStage: this.failureStage,
+      error: this.error,
+      clips: this.clips,
+      timings: this.timings,
+      usage: this.usage,
+    };
+  }
+
+  static restore(snapshot: JobSnapshot): Job {
+    const job = new Job(
+      snapshot.id,
+      snapshot.originalFileName,
+      snapshot.sourceKey,
+      snapshot.contentType,
+      snapshot.clientId,
+      new Date(snapshot.createdAt),
+    );
+    job.updatedAt = new Date(snapshot.updatedAt);
+    job.status = snapshot.status;
+    job.sourceDuration = snapshot.sourceDuration;
+    job.failureStage = snapshot.failureStage;
+    job.error = snapshot.error;
+    job.clips = snapshot.clips ?? [];
+    job.timings = snapshot.timings ?? {};
+    job.usage = snapshot.usage ?? {};
+    return job;
   }
 }
