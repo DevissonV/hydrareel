@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Put, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Logger, Param, Post, Put, StreamableFile } from '@nestjs/common';
 import { LibraryUseCase } from '../application/library.use-case';
 import { RegenerateClipUseCase } from '../application/regenerate-clip.use-case';
 import { TranscriptCorrectionUseCase } from '../application/transcript-correction.use-case';
 
 @Controller('api/library')
 export class LibraryController {
+  private readonly logger = new Logger(LibraryController.name);
+
   constructor(
     private readonly library: LibraryUseCase,
     private readonly regenerate: RegenerateClipUseCase,
@@ -87,7 +89,11 @@ export class LibraryController {
     @Body() body: { mode?: unknown; captionStyle?: unknown },
   ) {
     const task = this.regenerate.execute(clientId, jobId, clipIndex, body);
-    void task.catch(() => undefined);
+    void task.catch((error) => {
+      this.logger.error(
+        `background_regeneration_failed jobId=${jobId} clipIndex=${clipIndex} mode=${String(body.mode)} error=${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
     return { accepted: true, clipIndex: Number.parseInt(clipIndex, 10) };
   }
 
