@@ -48,6 +48,40 @@ function wordSafeBounds(
   };
 }
 
+function deterministicShorter(
+  transcript: Transcript,
+  original: ClipCandidate,
+  minSeconds: number,
+  maxSeconds: number,
+): ClipCandidate | undefined {
+  const duration = original.endSeconds - original.startSeconds;
+  if (duration <= minSeconds + 0.75) return undefined;
+
+  const target = Math.max(minSeconds, Math.min(maxSeconds, duration * 0.68));
+  const words = transcript.words.filter(
+    (word) => word.end > original.startSeconds && word.start < original.endSeconds,
+  );
+  const eligible = words.filter((word) => {
+    const d = word.end - original.startSeconds;
+    return d >= minSeconds && d <= maxSeconds && word.end < original.endSeconds - 0.2;
+  });
+  if (!eligible.length) return undefined;
+
+  const natural = eligible.filter((word) => /[.!?…]$/.test(word.word.trim()));
+  const pool = natural.length ? natural : eligible;
+  const endWord = pool.reduce((best, word) =>
+    Math.abs((word.end - original.startSeconds) - target) <
+    Math.abs((best.end - original.startSeconds) - target)
+      ? word
+      : best,
+  );
+
+  return {
+    ...original,
+    endSeconds: Math.min(original.endSeconds - 0.2, endWord.end + 0.08),
+  };
+}
+
 @Injectable()
 export class OpenAiClipBrainAdapter implements ClipBrainPort {
   constructor(@Inject(CONFIG) private readonly config: HydraConfig) {}
