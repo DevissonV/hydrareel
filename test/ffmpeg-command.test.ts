@@ -12,9 +12,13 @@ describe('ffmpeg render command', () => {
     expect(joined).toContain('libx264');
     expect(joined).toContain('aac');
     const seeks = args.reduce<number[]>((acc, value, index) => value === '-ss' ? [...acc, index] : acc, []);
-    expect(seeks).toHaveLength(2);
+    expect(seeks).toHaveLength(1);
     expect(seeks[0]).toBeLessThan(args.indexOf('-i'));
-    expect(seeks[1]).toBeGreaterThan(args.indexOf('-i'));
+    expect(joined).toContain('trim=start=');
+    expect(joined).toContain('setpts=PTS-STARTPTS');
+    expect(joined).toContain('atrim=start=');
+    expect(joined).toContain('asetpts=PTS-STARTPTS');
+    expect(joined).toContain('aresample=async=1:first_pts=0');
     expect(args.at(-1)).toBe('/tmp/out.mp4');
   });
 
