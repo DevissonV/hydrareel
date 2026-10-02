@@ -332,6 +332,9 @@ export class RegenerateClipUseCase {
         };
 
         manifest.clips = manifest.clips.map((clip) => clip.index === original.index ? updated : clip);
+        const transcriptMetrics = normalizeProjectMetrics(manifest.metrics);
+        transcriptMetrics.clipsUpdatedFromTranscript += 1;
+        manifest.metrics = transcriptMetrics;
         await this.storage.putJson(manifestKey, manifest);
 
         const job = await this.jobs.get(jobId);
