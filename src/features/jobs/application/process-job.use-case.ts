@@ -70,20 +70,23 @@ export class ProcessJobUseCase {
       job.transition('ANALYZING');
       await this.jobs.save(job);
       const a0 = Date.now();
-      const brain = await this.clipBrain.select(transcript);
+      const selected = await this.clipBrain.select(transcript);
+      const reviewed = await this.clipBrain.review(transcript, selected.clips);
       job.timings.analysisDurationMs = Date.now() - a0;
-      job.usage.analysis = brain.usage;
-      if (brain.clips.length === 0) {
-        throw new Error('Clip Brain no produjo clips válidos');
-      }
-      jobLog(job.id, 'analysis_completed', { analysisDurationMs: job.timings.analysisDurationMs, candidates: brain.clips.length, model: this.config.openaiClipModel });
+      job.usage.analysis = { selection: selected.usage, editorialReview: reviewed.usage };
+      jobLog(job.id, 'analysis_completed', {
+        analysisDurationMs: job.timings.analysisDurationMs,
+        candidatesSelected: selected.clips.length,
+        candidatesApproved: reviewed.clips.length,
+        model: this.config.openaiClipModel,
+      });
 
       job.transition('RENDERING');
       await this.jobs.save(job);
       const r0 = Date.now();
-      for (const [index, clip] of brain.clips.slice(0, this.config.maxClipsPerJob).entries()) {
+      for (const [index, clip] of reviewed.clips.slice(0, this.config.maxClipsPerJob).entries()) {
         const number = String(index + 1).padStart(2, '0');
-        const subtitlesPath = path.join(dir, `clip-${number}.srt`);
+        const subtitlesPath = path.join(dir, `clip-${number}.ass`);
         const outputPath = path.join(dir, `clip-${number}.mp4`);
         const captionCueCount = await this.rendering.writeSubtitles(subtitlesPath, transcript, clip);
         await this.rendering.render(sourcePath, outputPath, subtitlesPath, clip);
