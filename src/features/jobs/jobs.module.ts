@@ -11,6 +11,7 @@ import { GetJobUseCase } from './application/get-job.use-case';
 import { JobsController } from './presentation/jobs.controller';
 import { LibraryController } from './presentation/library.controller';
 import { LibraryUseCase } from './application/library.use-case';
+import { RegenerateClipUseCase } from './application/regenerate-clip.use-case';
 
 @Module({
   imports: [StorageModule, MediaModule, TranscriptionModule, ClipBrainModule, RenderingModule],
@@ -22,6 +23,7 @@ import { LibraryUseCase } from './application/library.use-case';
     ProcessJobUseCase,
     GetJobUseCase,
     LibraryUseCase,
+    RegenerateClipUseCase,
   ],
 })
 export class JobsModule {}
