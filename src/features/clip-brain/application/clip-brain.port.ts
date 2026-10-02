@@ -10,4 +10,5 @@ export interface ClipBrainResult {
 
 export interface ClipBrainPort {
   select(transcript: Transcript): Promise<ClipBrainResult>;
+  review(transcript: Transcript, clips: ClipCandidate[]): Promise<ClipBrainResult>;
 }
