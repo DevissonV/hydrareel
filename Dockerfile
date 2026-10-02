@@ -4,7 +4,8 @@ COPY package*.json ./
 RUN npm install --no-audit --no-fund
 COPY tsconfig*.json ./
 COPY src ./src
-RUN npm run build && npm prune --omit=dev
+COPY test ./test
+RUN npm test && npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
 RUN apt-get update \
