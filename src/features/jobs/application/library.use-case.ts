@@ -11,6 +11,7 @@ interface LibraryManifest {
   sourceDuration?: number;
   createdAt: string;
   completedAt: string;
+  processingDurationMs?: number;
   clips: JobClip[];
 }
 
@@ -53,6 +54,7 @@ export class LibraryUseCase {
       createdAt: string;
       updatedAt: string;
       completedAt?: string;
+      processingDurationMs?: number;
       clips: JobClip[];
       error?: string;
     }>();
@@ -67,6 +69,7 @@ export class LibraryUseCase {
         createdAt: job.createdAt.toISOString(),
         updatedAt: job.updatedAt.toISOString(),
         completedAt: manifest?.completedAt,
+        processingDurationMs: job.timings.totalDurationMs ?? manifest?.processingDurationMs,
         clips: job.clips.length ? job.clips : manifest?.clips ?? [],
         error: job.error,
       });
@@ -82,6 +85,7 @@ export class LibraryUseCase {
         createdAt: manifest.createdAt,
         updatedAt: manifest.completedAt,
         completedAt: manifest.completedAt,
+        processingDurationMs: manifest.processingDurationMs,
         clips: manifest.clips,
       });
     }
