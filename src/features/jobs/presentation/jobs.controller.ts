@@ -12,9 +12,9 @@ export class JobsController {
   ) {}
 
   @Post('upload-url')
-  create(@Body() body: { fileName?: string; contentType?: string }) {
+  create(@Body() body: { fileName?: string; contentType?: string; clientId?: string }) {
     if (!body.fileName) throw new Error('fileName es requerido');
-    return this.createUpload.execute(body.fileName, body.contentType ?? 'application/octet-stream');
+    return this.createUpload.execute(body.fileName, body.contentType ?? 'application/octet-stream', body.clientId);
   }
 
   @Post(':id/uploaded')
