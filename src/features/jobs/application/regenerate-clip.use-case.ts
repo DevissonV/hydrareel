@@ -45,6 +45,20 @@ function nextStyle(current: CaptionStyle): CaptionStyle {
   return 'pulse';
 }
 
+function replaceWholeText(value: string, from: string, to: string): string {
+  const needle = from.trim();
+  const replacement = to.trim();
+  if (!needle || !replacement) return value;
+  const escaped = needle.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\function nextStyle(current: CaptionStyle): CaptionStyle {
+  if (current === 'pulse') return 'clean';
+  if (current === 'clean') return 'neon';
+  return 'pulse';
+}
+');
+  const pattern = new RegExp('(?<![\\p{L}\\p{N}_])' + escaped + '(?![\\p{L}\\p{N}_])', 'giu');
+  return value.replace(pattern, replacement);
+}
+
 @Injectable()
 export class RegenerateClipUseCase {
   private busy = false;
@@ -233,11 +247,7 @@ export class RegenerateClipUseCase {
     const replaceText = (value: string): string => {
       let result = value;
       for (const replacement of replacements) {
-        const from = replacement.from.trim();
-        const to = replacement.to.trim();
-        if (!from || !to) continue;
-        result = result.split(from).join(to);
-        result = result.split(from.toLowerCase()).join(to.toLowerCase());
+        result = replaceWholeText(result, replacement.from, replacement.to);
       }
       return result;
     };
