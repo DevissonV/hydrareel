@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CONFIG, HydraConfig } from '../../../config';
-import { ClipBrainPort, ClipBrainResult } from '../application/clip-brain.port';
+import { ClipBrainPort, ClipBrainResult, ClipRegenerationMode } from '../application/clip-brain.port';
 import { clipPolicyForDuration, ClipCandidate, validateAndNormalizeCandidates } from '../domain/clip-candidate';
 import { Transcript } from '../../transcription/domain/transcript';
 
@@ -201,5 +201,83 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     );
     if (!normalized.length) throw new Error('La revisión editorial no encontró un corte completo y coherente');
     return { clips: normalized, usage };
+  }
+
+  async regenerate(
+    transcript: Transcript,
+    original: ClipCandidate,
+    mode: ClipRegenerationMode,
+  ): Promise<{ clip: ClipCandidate; usage?: unknown }> {
+    const policy = clipPolicyForDuration(
+      transcript.duration,
+      this.config.minClipSeconds,
+      this.config.maxClipSeconds,
+      this.config.maxClipsPerJob,
+    );
+    const timeline = transcript.segments.map((s, index) => ({ index, start: s.start, end: s.end, text: s.text }));
+    const originalDuration = original.endSeconds - original.startSeconds;
+
+    const schema = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['startSegmentIndex', 'endSegmentIndex', 'title', 'hook', 'reason', 'socialCaption', 'hashtags', 'score'],
+      properties: {
+        startSegmentIndex: { type: 'integer', minimum: 0 },
+        endSegmentIndex: { type: 'integer', minimum: 0 },
+        title: { type: 'string', maxLength: 80 },
+        hook: { type: 'string', maxLength: 140 },
+        reason: { type: 'string', maxLength: 220 },
+        socialCaption: { type: 'string', maxLength: 500 },
+        hashtags: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'string', maxLength: 40 } },
+        score: { type: 'number', minimum: 0, maximum: 100 },
+      },
+    };
+
+    const instruction =
+      mode === 'shorter'
+        ? `Crea una versión más compacta del mismo momento, idealmente 25-35% más corta que ${originalDuration.toFixed(1)}s, sin cortar la idea ni el payoff.`
+        : mode === 'longer'
+          ? `Crea una versión con más contexto del mismo momento, idealmente 20-35% más larga que ${originalDuration.toFixed(1)}s, sin superar ${policy.maxSeconds}s ni añadir relleno irrelevante.`
+          : 'Busca un momento alternativo fuerte del video, diferente al original, que pueda funcionar mejor como short y que se entienda por sí solo.';
+
+    const { parsed, usage } = await this.structured(
+      'hydrareel_regenerated_clip',
+      schema,
+      `Eres un editor senior de video corto. ${instruction} Usa exclusivamente índices de segmentos reales. El inicio debe sentirse natural y el final debe cerrar completamente la frase o idea. Devuelve además packaging listo para publicar: título, hook visual fiel al contenido, socialCaption y 1-5 hashtags específicos. No inventes hechos ni uses clickbait falso.`,
+      { mode, duration: transcript.duration, original, policy, timeline },
+    );
+
+    const bounds = wordSafeBounds(transcript, parsed.startSegmentIndex, parsed.endSegmentIndex);
+    if (!bounds) throw new Error('No se pudo obtener un corte coherente para la regeneración');
+
+    const candidate = {
+      startSeconds: bounds.startSeconds,
+      endSeconds: bounds.endSeconds,
+      title: parsed.title,
+      hook: parsed.hook,
+      reason: parsed.reason,
+      socialCaption: parsed.socialCaption,
+      hashtags: parsed.hashtags,
+      score: parsed.score,
+    };
+
+    const min =
+      mode === 'shorter'
+        ? Math.max(8, Math.min(policy.minSeconds, originalDuration * 0.45))
+        : policy.minSeconds;
+    const max =
+      mode === 'shorter'
+        ? Math.max(min, Math.min(policy.maxSeconds, originalDuration * 0.9))
+        : policy.maxSeconds;
+
+    const normalized = validateAndNormalizeCandidates(
+      { clips: [candidate] },
+      min,
+      max,
+      transcript.duration,
+      1,
+    );
+    if (!normalized.length) throw new Error('La regeneración no produjo un clip válido');
+    return { clip: normalized[0], usage };
   }
 }
