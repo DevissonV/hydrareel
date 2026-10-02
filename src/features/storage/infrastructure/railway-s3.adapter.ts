@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createWriteStream, createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
@@ -56,6 +57,12 @@ export class RailwayS3Adapter implements ObjectStoragePort {
       }),
       { expiresIn: this.config.presignedUrlTtlSeconds },
     );
+  }
+
+  async openReadStream(key: string): Promise<Readable> {
+    const result = await this.s3.send(new GetObjectCommand({ Bucket: this.config.bucketName, Key: key }));
+    if (!result.Body) throw new Error('Storage object has no body');
+    return result.Body as Readable;
   }
 
   async downloadToFile(key: string, destination: string): Promise<void> {
