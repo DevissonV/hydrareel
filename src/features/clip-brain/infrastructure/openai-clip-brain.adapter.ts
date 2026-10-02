@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CONFIG, HydraConfig } from '../../../config';
 import { ClipBrainPort, ClipBrainResult, ClipRegenerationMode } from '../application/clip-brain.port';
-import { clipPolicyForDuration, ClipCandidate, validateAndNormalizeCandidates } from '../domain/clip-candidate';
+import { clipPolicyForDuration, ClipCandidate, normalizeHashtags, validateAndNormalizeCandidates } from '../domain/clip-candidate';
 import { Transcript } from '../../transcription/domain/transcript';
 
 function outputText(data: any): string {
@@ -78,6 +78,7 @@ function deterministicShorter(
 
   return {
     ...original,
+    hashtags: normalizeHashtags(original.hashtags),
     endSeconds: Math.min(original.endSeconds - 0.2, endWord.end + 0.08),
   };
 }
@@ -138,7 +139,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
               hook: { type: 'string', maxLength: 140 },
               reason: { type: 'string', maxLength: 220 },
               socialCaption: { type: 'string', maxLength: 500 },
-              hashtags: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'string', maxLength: 40 } },
+              hashtags: { type: 'array', minItems: 5, maxItems: 5, items: { type: 'string', maxLength: 40 } },
               emphasisTerms: { type: 'array', minItems: 0, maxItems: 6, items: { type: 'string', maxLength: 40 } },
               score: { type: 'number', minimum: 0, maximum: 100 },
             },
@@ -150,7 +151,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const { parsed, usage } = await this.structured(
       'hydrareel_clips',
       schema,
-      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. Además del corte, empaqueta cada clip para publicación: title <=80 caracteres, hook <=140 caracteres que pueda mostrarse visualmente al inicio sin inventar hechos, socialCaption <=500 caracteres útil como copy para Reels/Shorts/TikTok y entre 1 y 5 hashtags específicos. Mantén reason <=220. No uses clickbait falso. Devuelve emphasisTerms con 0-6 palabras o frases cortas que realmente carguen significado: conceptos centrales, cifras, nombres, contraste o payoff. No resaltes conectores, muletillas ni palabras comunes solo por animar. Si nada merece énfasis, devuelve []. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
+      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. Además del corte, empaqueta cada clip para publicación: title <=80 caracteres y hook <=140 caracteres que pueda mostrarse visualmente al inicio sin inventar hechos. socialCaption <=500 caracteres, en español natural, correctamente escrito y listo para copiar en Reels/Shorts/TikTok. Si el contenido es claramente humorístico, añade un remate breve, divertido y relacionado con lo que realmente ocurre; puedes usar 1-2 emojis, pero NO inventes palabras, deformes ortografía, repitas sílabas ni fuerces chistes. Si no es humor, no lo fuerces. Devuelve exactamente 5 hashtags: #viral y #fyp son obligatorios, más 3 hashtags específicos y relevantes al contenido; si es humor, uno de esos 3 debe ser #humor. Mantén reason <=220. No uses clickbait falso. Devuelve emphasisTerms con 0-6 palabras o frases cortas que realmente carguen significado: conceptos centrales, cifras, nombres, contraste o payoff. No resaltes conectores, muletillas ni palabras comunes solo por animar. Si nada merece énfasis, devuelve []. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
       { duration: transcript.duration, policy, timeline },
     );
 
@@ -293,7 +294,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
         hook: { type: 'string', maxLength: 140 },
         reason: { type: 'string', maxLength: 220 },
         socialCaption: { type: 'string', maxLength: 500 },
-        hashtags: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'string', maxLength: 40 } },
+        hashtags: { type: 'array', minItems: 5, maxItems: 5, items: { type: 'string', maxLength: 40 } },
         emphasisTerms: { type: 'array', minItems: 0, maxItems: 6, items: { type: 'string', maxLength: 40 } },
         score: { type: 'number', minimum: 0, maximum: 100 },
       },
@@ -312,7 +313,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       const result = await this.structured(
         'hydrareel_regenerated_clip',
         schema,
-        `Eres un editor senior de video corto. ${instruction} Usa exclusivamente índices de segmentos reales. El inicio debe sentirse natural y el final debe cerrar completamente la frase o idea. Devuelve además packaging listo para publicar: título, hook visual fiel al contenido, socialCaption y 1-5 hashtags específicos. Devuelve también emphasisTerms con 0-6 términos realmente importantes para resaltar en subtítulos; no elijas palabras por ritmo ni posición. No inventes hechos ni uses clickbait falso.`,
+        `Eres un editor senior de video corto. ${instruction} Usa exclusivamente índices de segmentos reales. El inicio debe sentirse natural y el final debe cerrar completamente la frase o idea. Devuelve además packaging listo para publicar: título y hook visual fiel al contenido. socialCaption debe estar en español natural y correctamente escrito. Si el contenido es claramente humorístico, agrega un remate breve y divertido relacionado con el clip, sin inventar palabras, deformar ortografía, repetir sílabas ni forzar chistes. Devuelve exactamente 5 hashtags: #viral y #fyp obligatorios, más 3 específicos del contenido; si es humor, incluye #humor entre esos 3. Devuelve también emphasisTerms con 0-6 términos realmente importantes para resaltar en subtítulos; no elijas palabras por ritmo ni posición. No inventes hechos ni uses clickbait falso.`,
         { mode, duration: transcript.duration, original, policy, timeline },
       );
       parsed = result.parsed;
