@@ -9,8 +9,10 @@ export const clipCandidateSchema = z.object({
   startSeconds: z.number().nonnegative(),
   endSeconds: z.number().positive(),
   title: boundedText(120),
-  hook: boundedText(240),
+  hook: boundedText(180),
   reason: boundedText(300),
+  socialCaption: boundedText(600),
+  hashtags: z.array(boundedText(40)).min(1).max(5),
   score: z.number().min(0).max(100),
 });
 
