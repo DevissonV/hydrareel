@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildCaptionCues, buildRenderArgs } from '../src/features/rendering/infrastructure/ffmpeg-rendering.adapter';
+import { buildCaptionCues, buildMagicEditPlan, buildRenderArgs } from '../src/features/rendering/infrastructure/ffmpeg-rendering.adapter';
 
 describe('ffmpeg render command', () => {
   it('fuerza vertical H264 AAC y subtítulos ASS', () => {
     const args = buildRenderArgs('/tmp/source.mp4', '/tmp/out.mp4', '/tmp/captions.ass', {
-      startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], score: 80,
+      startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], emphasisTerms: ['riesgo'], score: 80,
     });
     const joined = args.join(' ');
     expect(joined).toContain('crop=1080:1920');
@@ -24,11 +24,36 @@ describe('ffmpeg render command', () => {
 
   it('usa composición subject-safe para fuentes horizontales', () => {
     const args = buildRenderArgs('/tmp/source.mp4', '/tmp/out.mp4', '/tmp/captions.ass', {
-      startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], score: 80,
+      startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], emphasisTerms: ['riesgo'], score: 80,
     }, { sourceWidth: 1920, sourceHeight: 1080, hook: 'x', captionStyle: 'pulse' });
     const joined = args.join(' ');
     expect(joined).toContain('gblur=sigma=32');
     expect(joined).toContain('overlay=(W-w)/2:(H-h)/2');
+  });
+
+  it('comprime pausas largas y conserva énfasis editorial', () => {
+    const transcript = {
+      text: 'Esto cambia el riesgo completamente',
+      duration: 8,
+      model: 'test',
+      segments: [{ start: 0, end: 8, text: 'Esto cambia el riesgo completamente' }],
+      words: [
+        { word: 'Esto', start: 0.2, end: 0.5 },
+        { word: 'cambia', start: 0.55, end: 0.9 },
+        { word: 'el', start: 2.2, end: 2.35 },
+        { word: 'riesgo', start: 3.0, end: 3.45 },
+        { word: 'completamente', start: 3.5, end: 4.2 },
+      ],
+    };
+    const clip = {
+      startSeconds: 0, endSeconds: 6, title: 'x', hook: 'x', reason: 'x',
+      socialCaption: 'copy', hashtags: ['#x'], emphasisTerms: ['riesgo'], score: 90,
+    };
+    const plan = buildMagicEditPlan(transcript, clip);
+    expect(plan.silenceCuts).toBeGreaterThanOrEqual(1);
+    expect(plan.removedSeconds).toBeGreaterThan(0);
+    expect(plan.emphasisTerms).toEqual(['riesgo']);
+    expect(plan.outputDuration).toBeLessThan(6);
   });
 
   it('genera captions cortos y como máximo dos líneas', () => {
@@ -39,7 +64,7 @@ describe('ffmpeg render command', () => {
     ].map(([word,start,end]) => ({ word:String(word), start:Number(start), end:Number(end) }));
 
     const cues = buildCaptionCues(words, {
-      startSeconds: 0, endSeconds: 6, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], score: 90,
+      startSeconds: 0, endSeconds: 6, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], emphasisTerms: ['riesgo'], score: 90,
     });
 
     expect(cues.length).toBeGreaterThan(1);
