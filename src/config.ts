@@ -20,7 +20,7 @@ export function loadConfig() {
     openaiApiKey: process.env.OPENAI_API_KEY ?? process.env.OPENAI_COMPATIBLE_API_KEY ?? '',
     openaiBaseUrl: (process.env.OPENAI_BASE_URL ?? process.env.OPENAI_COMPATIBLE_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, ''),
     openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'whisper-1',
-    openaiClipModel: process.env.OPENAI_CLIP_MODEL ?? process.env.OPENAI_COMPATIBLE_MODEL ?? 'gpt-5.6-luna',
+    openaiClipModel: process.env.OPENAI_CLIP_MODEL ?? process.env.OPENAI_COMPATIBLE_MODEL ?? 'gpt-6-luna',
     bucketEndpoint: process.env.BUCKET_ENDPOINT ?? '',
     bucketRegion: process.env.BUCKET_REGION ?? 'us-east-1',
     bucketName: process.env.BUCKET_NAME ?? '',
