@@ -32,6 +32,20 @@ describe('clip policy and candidate validation', () => {
     expect(result.map(x => x.title)).toEqual(['A','C']);
   });
 
+  it('recorta textos largos sin tumbar el job', () => {
+    const result = validateAndNormalizeCandidates({ clips: [{
+      startSeconds: 0,
+      endSeconds: 20,
+      title: 'T'.repeat(200),
+      hook: 'H'.repeat(400),
+      reason: 'R'.repeat(600),
+      score: 80,
+    }] }, 8, 30, 60, 3);
+    expect(result[0].title).toHaveLength(120);
+    expect(result[0].hook).toHaveLength(240);
+    expect(result[0].reason).toHaveLength(300);
+  });
+
   it('rechaza JSON inválido', () => {
     expect(() => validateAndNormalizeCandidates({ clips: [{ startSeconds: 'x' }] }, 20, 60, 100, 3)).toThrow();
   });
