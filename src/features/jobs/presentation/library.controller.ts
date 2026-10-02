@@ -16,6 +16,11 @@ export class LibraryController {
     return this.library.list(clientId);
   }
 
+  @Get('metrics')
+  metrics(@Headers('x-hydra-client-id') clientId?: string) {
+    return this.library.metrics(clientId);
+  }
+
   @Get(':jobId/transcript')
   transcript(
     @Headers('x-hydra-client-id') clientId: string | undefined,
