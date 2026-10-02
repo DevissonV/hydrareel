@@ -11,6 +11,7 @@ import { ClipCandidate } from '../../clip-brain/domain/clip-candidate';
 import { JobClip } from '../domain/job.entity';
 import { RenderGate } from './render-gate';
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
+import { normalizeProjectMetrics, ProjectMetrics } from '../domain/project-metrics';
 
 type RegenerateMode = 'shorter' | 'longer' | 'alternative' | 'restyle';
 
@@ -22,6 +23,7 @@ interface LibraryManifest {
   sourceDuration?: number;
   createdAt: string;
   completedAt: string;
+  metrics?: ProjectMetrics;
   clips: JobClip[];
 }
 
