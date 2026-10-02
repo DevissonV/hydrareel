@@ -10,6 +10,7 @@ import { Transcript } from '../../transcription/domain/transcript';
 import { ClipCandidate } from '../../clip-brain/domain/clip-candidate';
 import { JobClip } from '../domain/job.entity';
 import { RenderGate } from './render-gate';
+import { JOB_REPOSITORY, JobRepository } from './job.repository';
 
 type RegenerateMode = 'shorter' | 'longer' | 'alternative' | 'restyle';
 
@@ -51,6 +52,7 @@ export class RegenerateClipUseCase {
     @Inject(MEDIA_PORT) private readonly media: MediaPort,
     @Inject(CLIP_BRAIN_PORT) private readonly clipBrain: ClipBrainPort,
     @Inject(RENDERING_PORT) private readonly rendering: RenderingPort,
+    @Inject(JOB_REPOSITORY) private readonly jobs: JobRepository,
     private readonly renderGate: RenderGate,
   ) {}
 
@@ -193,4 +195,134 @@ export class RegenerateClipUseCase {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
+  async refreshFromCorrectedTranscript(
+    clientId: string,
+    jobId: string,
+    replacements: Array<{ from: string; to: string }> = [],
+  ): Promise<number> {
+    const releaseRender = await this.renderGate.acquire(`transcript:${jobId}`);
+    const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
+    const dir = path.join(os.tmpdir(), 'hydrareel-transcript-refresh', jobId);
+    const sourcePath = path.join(dir, `source.${jobId}.mp4`);
+
+    const replaceText = (value: string): string => {
+      let result = value;
+      for (const replacement of replacements) {
+        const from = replacement.from.trim();
+        const to = replacement.to.trim();
+        if (!from || !to) continue;
+        result = result.split(from).join(to);
+        result = result.split(from.toLowerCase()).join(to.toLowerCase());
+      }
+      return result;
+    };
+
+    try {
+      const manifest = await this.storage.getJson<LibraryManifest>(manifestKey);
+      if (manifest.clientId !== clientId || manifest.id !== jobId) {
+        throw new NotFoundException('Proyecto no encontrado');
+      }
+
+      const storedTranscript = await this.storage.getJson<Omit<Transcript, 'model'> & { model?: string }>(
+        `transcripts/${jobId}/transcript.json`,
+      );
+      const transcript: Transcript = {
+        ...storedTranscript,
+        model: storedTranscript.model ?? 'stored-transcript',
+      };
+
+      await mkdir(dir, { recursive: true });
+      await this.storage.downloadToFile(manifest.sourceKey, sourcePath);
+      const sourceMeta = await this.media.probe(sourcePath);
+      if (!sourceMeta.width || !sourceMeta.height || !sourceMeta.hasAudio) {
+        throw new Error('El source del proyecto no es válido para actualizar');
+      }
+
+      let updatedCount = 0;
+      for (const original of manifest.clips) {
+        const subtitlesPath = path.join(dir, `captions-${original.index}.ass`);
+        const outputPath = path.join(dir, `output-${original.index}.mp4`);
+
+        const candidate: ClipCandidate = {
+          startSeconds: original.startSeconds,
+          endSeconds: original.endSeconds,
+          title: replaceText(original.title),
+          hook: replaceText(original.hook ?? original.title),
+          reason: replaceText(original.reason),
+          socialCaption: replaceText(original.socialCaption ?? original.reason),
+          hashtags: original.hashtags?.length ? original.hashtags : ['#HydraReel'],
+          emphasisTerms: (original.emphasisTerms ?? []).map(replaceText),
+          score: original.score,
+        };
+
+        const captionStyle = original.captionStyle ?? 'pulse';
+        const framing = sourceMeta.width / sourceMeta.height > 0.82 ? 'subject-safe' as const : 'fill' as const;
+        const plan = this.rendering.createPlan(transcript, candidate);
+        const captionCueCount = await this.rendering.writeSubtitles(
+          subtitlesPath,
+          transcript,
+          candidate,
+          { hook: candidate.hook, captionStyle, plan },
+        );
+        await this.rendering.render(sourcePath, outputPath, subtitlesPath, candidate, {
+          sourceWidth: sourceMeta.width,
+          sourceHeight: sourceMeta.height,
+          hook: candidate.hook,
+          captionStyle,
+          plan,
+        });
+
+        const outputMeta = await this.media.probe(outputPath);
+        const key = `outputs/${jobId}/clip-${String(original.index).padStart(2, '0')}-t${Date.now()}.mp4`;
+        await this.storage.uploadFile(key, outputPath, 'video/mp4');
+
+        const updated: JobClip = {
+          ...original,
+          key,
+          title: candidate.title,
+          hook: candidate.hook,
+          socialCaption: candidate.socialCaption,
+          reason: candidate.reason,
+          emphasisTerms: candidate.emphasisTerms,
+          magicEdit: {
+            silenceCuts: plan.silenceCuts,
+            removedSeconds: plan.removedSeconds,
+            punchIns: plan.punchIns.length,
+            audioPolished: plan.audioPolished,
+            colorPolished: plan.colorPolished,
+          },
+          captionStyle,
+          framing,
+          durationSeconds: outputMeta.durationSeconds,
+          captionCueCount,
+          video: {
+            width: outputMeta.width,
+            height: outputMeta.height,
+            codec: outputMeta.videoCodec,
+            audioCodec: outputMeta.audioCodec,
+          },
+        };
+
+        manifest.clips = manifest.clips.map((clip) => clip.index === original.index ? updated : clip);
+        await this.storage.putJson(manifestKey, manifest);
+
+        const job = await this.jobs.get(jobId);
+        if (job && job.clientId === clientId) {
+          job.clips = job.clips.map((clip) => clip.index === original.index ? updated : clip);
+          await this.jobs.save(job);
+        }
+
+        if (original.key !== key) {
+          await this.storage.deleteKeys([original.key]).catch(() => undefined);
+        }
+        updatedCount += 1;
+      }
+
+      return updatedCount;
+    } finally {
+      releaseRender();
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
 }
