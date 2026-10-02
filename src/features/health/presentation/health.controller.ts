@@ -1,4 +1,4 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { CONFIG, HydraConfig } from '../../../config';
 import { MEDIA_PORT, MediaPort } from '../../media/application/media.port';
 import { OBJECT_STORAGE, ObjectStoragePort } from '../../storage/application/object-storage.port';
@@ -14,11 +14,14 @@ export class HealthController {
   @Get()
   async get() {
     const [ffmpeg, storage] = await Promise.all([this.media.isAvailable(), this.storage.health()]);
-    return {
-      status: 'ok',
+    const openaiConfigured = Boolean(this.config.openaiApiKey);
+    const body = {
+      status: ffmpeg && storage && openaiConfigured ? 'ok' : 'degraded',
       ffmpeg,
       storage,
-      openaiConfigured: Boolean(this.config.openaiApiKey),
+      openaiConfigured,
     };
+    if (body.status !== 'ok') throw new ServiceUnavailableException(body);
+    return body;
   }
 }
