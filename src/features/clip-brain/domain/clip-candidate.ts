@@ -13,6 +13,7 @@ export const clipCandidateSchema = z.object({
   reason: boundedText(300),
   socialCaption: boundedText(600),
   hashtags: z.array(boundedText(40)).min(1).max(5),
+  emphasisTerms: z.array(boundedText(40)).max(6),
   score: z.number().min(0).max(100),
 });
 
