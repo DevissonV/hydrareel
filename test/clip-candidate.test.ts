@@ -5,14 +5,20 @@ describe('clip policy and candidate validation', () => {
   it('adapta duración y cantidad al tamaño del video', () => {
     expect(clipPolicyForDuration(7.9, 20, 60, 3).maxClips).toBe(0);
 
-    const short = clipPolicyForDuration(46.2, 20, 60, 3);
+    const short = clipPolicyForDuration(46.2, 20, 60, 10);
     expect(short).toEqual({ minSeconds: 8, maxSeconds: 30, maxClips: 3 });
 
-    const medium = clipPolicyForDuration(120, 20, 60, 3);
+    const medium = clipPolicyForDuration(120, 20, 60, 10);
     expect(medium).toEqual({ minSeconds: 12, maxSeconds: 45, maxClips: 3 });
 
-    const long = clipPolicyForDuration(600, 20, 60, 3);
-    expect(long).toEqual({ minSeconds: 20, maxSeconds: 60, maxClips: 3 });
+    const eightMinutes = clipPolicyForDuration(480, 20, 60, 10);
+    expect(eightMinutes).toEqual({ minSeconds: 20, maxSeconds: 60, maxClips: 6 });
+
+    const elevenMinutes = clipPolicyForDuration(662, 20, 60, 10);
+    expect(elevenMinutes).toEqual({ minSeconds: 20, maxSeconds: 60, maxClips: 6 });
+
+    const long = clipPolicyForDuration(1200, 20, 60, 10);
+    expect(long).toEqual({ minSeconds: 20, maxSeconds: 60, maxClips: 10 });
   });
 
   it('permite devolver menos clips que el máximo si solo hay uno bueno', () => {
