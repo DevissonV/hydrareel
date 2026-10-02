@@ -18,6 +18,12 @@ function assertUuid(value: string | undefined, name: string): string {
   return value;
 }
 
+function assertClipIndex(value: string): number {
+  const index = Number.parseInt(value, 10);
+  if (!Number.isInteger(index) || index < 1) throw new BadRequestException('clipIndex inválido');
+  return index;
+}
+
 function normalizeToken(value: string): string {
   return value
     .normalize('NFD')
@@ -30,12 +36,22 @@ function tokens(text: string): string[] {
   return text.trim().match(/\S+/g) ?? [];
 }
 
-function retimeWords(original: TranscriptWord[], correctedText: string, duration: number): TranscriptWord[] {
+function retimeWords(
+  original: TranscriptWord[],
+  correctedText: string,
+  duration: number,
+  minStart = 0,
+): TranscriptWord[] {
   const corrected = tokens(correctedText);
   if (!corrected.length) throw new BadRequestException('La transcripción no puede quedar vacía');
   if (!original.length) {
-    const slice = duration / corrected.length;
-    return corrected.map((word, index) => ({ word, start: index * slice, end: (index + 1) * slice }));
+    const span = Math.max(0.1, duration - minStart);
+    const slice = span / corrected.length;
+    return corrected.map((word, index) => ({
+      word,
+      start: minStart + index * slice,
+      end: minStart + (index + 1) * slice,
+    }));
   }
 
   const result: TranscriptWord[] = [];
@@ -44,7 +60,7 @@ function retimeWords(original: TranscriptWord[], correctedText: string, duration
   const lookAhead = 6;
 
   const addInserted = (word: string, nextStart: number) => {
-    const previousEnd = result.at(-1)?.end ?? 0;
+    const previousEnd = result.at(-1)?.end ?? minStart;
     const available = Math.max(0.04, nextStart - previousEnd);
     const start = previousEnd;
     const end = Math.min(nextStart, start + Math.max(0.04, Math.min(0.22, available)));
@@ -94,7 +110,7 @@ function retimeWords(original: TranscriptWord[], correctedText: string, duration
   }
 
   while (j < corrected.length) {
-    const previousEnd = result.at(-1)?.end ?? original.at(-1)?.end ?? 0;
+    const previousEnd = result.at(-1)?.end ?? original.at(-1)?.end ?? minStart;
     const start = Math.min(duration, previousEnd);
     const end = Math.min(duration, start + 0.14);
     result.push({ word: corrected[j], start, end: Math.max(start + 0.01, end) });
@@ -147,6 +163,121 @@ export class TranscriptCorrectionUseCase {
     } catch {
       throw new NotFoundException('La transcripción todavía no está disponible');
     }
+  }
+
+  async getClip(
+    rawClientId: string | undefined,
+    rawJobId: string,
+    rawClipIndex: string,
+  ) {
+    const job = await this.ownedJob(rawClientId, rawJobId);
+    const clipIndex = assertClipIndex(rawClipIndex);
+    const clip = job.clips.find((item) => item.index === clipIndex);
+    if (!clip) throw new NotFoundException('Clip no encontrado');
+
+    try {
+      const transcript = await this.storage.getJson<StoredTranscript>(`transcripts/${job.id}/transcript.json`);
+      const words = (transcript.words ?? []).filter(
+        (word) => word.end > clip.startSeconds && word.start < clip.endSeconds,
+      );
+      return {
+        jobId: job.id,
+        clipIndex,
+        text: words.map((word) => word.word).join(' ').trim(),
+        correctedAt: transcript.correctedAt,
+        correctionCount: transcript.correctionCount ?? 0,
+      };
+    } catch {
+      throw new NotFoundException('La transcripción todavía no está disponible');
+    }
+  }
+
+  async updateClip(
+    rawClientId: string | undefined,
+    rawJobId: string,
+    rawClipIndex: string,
+    rawText: unknown,
+  ) {
+    const job = await this.ownedJob(rawClientId, rawJobId);
+    const clipIndex = assertClipIndex(rawClipIndex);
+    const clip = job.clips.find((item) => item.index === clipIndex);
+    if (!clip) throw new NotFoundException('Clip no encontrado');
+    if (typeof rawText !== 'string') throw new BadRequestException('Texto inválido');
+
+    const text = rawText.trim();
+    if (!text) throw new BadRequestException('La transcripción no puede quedar vacía');
+    if (text.length > 20_000) throw new BadRequestException('La transcripción del clip es demasiado larga');
+
+    const key = `transcripts/${job.id}/transcript.json`;
+    let transcript: StoredTranscript;
+    try {
+      transcript = await this.storage.getJson<StoredTranscript>(key);
+    } catch {
+      throw new NotFoundException('La transcripción todavía no está disponible');
+    }
+
+    const originalClipWords = (transcript.words ?? []).filter(
+      (word) => word.end > clip.startSeconds && word.start < clip.endSeconds,
+    );
+    const currentText = originalClipWords.map((word) => word.word).join(' ').trim();
+    if (text === currentText) {
+      return {
+        jobId: job.id,
+        clipIndex,
+        text,
+        correctedAt: transcript.correctedAt,
+        correctionCount: transcript.correctionCount ?? 0,
+        updatingVideo: false,
+      };
+    }
+
+    const correctedClipWords = retimeWords(
+      originalClipWords,
+      text,
+      clip.endSeconds,
+      clip.startSeconds,
+    );
+
+    const replacements: Array<{ from: string; to: string }> = [];
+    for (const corrected of correctedClipWords) {
+      const original = originalClipWords.find(
+        (word) => Math.abs(word.start - corrected.start) < 0.001 && Math.abs(word.end - corrected.end) < 0.001,
+      );
+      if (original && normalizeToken(original.word) !== normalizeToken(corrected.word)) {
+        replacements.push({ from: original.word, to: corrected.word });
+      }
+    }
+
+    const before = (transcript.words ?? []).filter((word) => word.end <= clip.startSeconds);
+    const after = (transcript.words ?? []).filter((word) => word.start >= clip.endSeconds);
+    const correctedWords = [...before, ...correctedClipWords, ...after]
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+    const correctedAt = new Date().toISOString();
+
+    const updated: StoredTranscript = {
+      ...transcript,
+      text: correctedWords.map((word) => word.word).join(' ').trim(),
+      words: correctedWords,
+      segments: rebuildSegments(transcript.segments ?? [], correctedWords),
+      correctedAt,
+      correctionCount: (transcript.correctionCount ?? 0) + 1,
+    };
+    await this.storage.putJson(key, updated);
+
+    setImmediate(() => {
+      void this.regenerate
+        .refreshFromCorrectedTranscript(job.clientId, job.id, replacements, [clipIndex])
+        .catch(() => undefined);
+    });
+
+    return {
+      jobId: job.id,
+      clipIndex,
+      text,
+      correctedAt,
+      correctionCount: updated.correctionCount,
+      updatingVideo: true,
+    };
   }
 
   async update(rawClientId: string | undefined, rawJobId: string, rawText: unknown) {
