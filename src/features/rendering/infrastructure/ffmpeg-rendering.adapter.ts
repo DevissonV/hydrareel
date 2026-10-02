@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import {
+  CaptionOptions,
   CaptionStyle,
   MagicEditPlan,
   RenderingPort,
@@ -396,7 +397,7 @@ export class FfmpegRenderingAdapter implements RenderingPort {
     path: string,
     transcript: Transcript,
     clip: ClipCandidate,
-    options: { hook?: string; captionStyle?: CaptionStyle; plan?: MagicEditPlan },
+    options: CaptionOptions,
   ): Promise<number> {
     const plan = options.plan ?? buildMagicEditPlan(transcript, clip, options.platform ?? 'tiktok');
     const composition = plan.composition ?? buildCompositionPlan(
@@ -405,7 +406,6 @@ export class FfmpegRenderingAdapter implements RenderingPort {
       options.platform ?? 'tiktok',
     );
     const style = options.captionStyle ?? composition.identity;
-    const palette = captionPalette(style);
     const allCues = buildCaptionCues(transcript.words, clip);
     const hookEnd = options.hook?.trim()
       ? Math.min(composition.hook.durationSeconds, plan.outputDuration)
