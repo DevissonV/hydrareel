@@ -92,7 +92,8 @@ export function buildRenderArgs(source: string, destination: string, subtitlesPa
   const videoFilter = `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,${subtitleFilter}`;
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
-    '-ss', clip.startSeconds.toFixed(3), '-i', source,
+    '-i', source,
+    '-ss', clip.startSeconds.toFixed(3),
     '-t', duration.toFixed(3),
     '-vf', videoFilter,
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p',
