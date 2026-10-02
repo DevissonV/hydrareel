@@ -79,7 +79,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const { parsed, usage } = await this.structured(
       'hydrareel_clips',
       schema,
-      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
+      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. Mantén title <=80 caracteres, hook <=140 y reason <=220. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
       { duration: transcript.duration, policy, timeline },
     );
 
@@ -135,7 +135,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const { parsed, usage } = await this.structured(
       'hydrareel_editorial_qa',
       schema,
-      `Eres el control editorial final de HydraReel. Antes de renderizar, revisa cada candidato como si fueras un editor humano exigente. Un clip solo se aprueba si: (1) se entiende solo, (2) no empieza a mitad de una idea dependiente de contexto anterior, (3) no termina a mitad de una frase, pensamiento o payoff, y (4) tiene un cierre natural. Puedes mover el inicio y el final únicamente usando índices de segmentos reales de la transcripción. Ajusta a los límites naturales más cercanos aunque el clip quede más corto o largo, siempre dentro de ${policy.minSeconds}-${policy.maxSeconds}s. Si no puede quedar coherente, approved=false. Devuelve una entrada por cada candidato.`,
+      `Eres el control editorial final de HydraReel. Antes de renderizar, revisa cada candidato como si fueras un editor humano exigente. Un clip solo se aprueba si: (1) se entiende solo, (2) no empieza a mitad de una idea dependiente de contexto anterior, (3) no termina a mitad de una frase, pensamiento o payoff, y (4) tiene un cierre natural. Puedes mover el inicio y el final únicamente usando índices de segmentos reales de la transcripción. Ajusta a los límites naturales más cercanos aunque el clip quede más corto o largo, siempre dentro de ${policy.minSeconds}-${policy.maxSeconds}s. Si no puede quedar coherente, approved=false. Mantén title <=80 caracteres y reason <=220. Devuelve una entrada por cada candidato.`,
       { duration: transcript.duration, policy, candidates: clips, timeline },
     );
 
