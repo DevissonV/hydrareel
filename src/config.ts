@@ -12,7 +12,7 @@ export function loadConfig() {
   return {
     port: intEnv('PORT', 3000),
     maxVideoMinutes: intEnv('MAX_VIDEO_MINUTES', 30),
-    maxClipsPerJob: intEnv('MAX_CLIPS_PER_JOB', 3),
+    maxClipsPerJob: intEnv('MAX_CLIPS_PER_JOB', 10),
     minClipSeconds: intEnv('MIN_CLIP_SECONDS', 20),
     maxClipSeconds: intEnv('MAX_CLIP_SECONDS', 60),
     maxConcurrentJobs: intEnv('MAX_CONCURRENT_JOBS', 1),
