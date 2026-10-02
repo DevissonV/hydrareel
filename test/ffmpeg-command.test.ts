@@ -11,6 +11,8 @@ describe('ffmpeg render command', () => {
     expect(joined).toContain('subtitles=');
     expect(joined).toContain('libx264');
     expect(joined).toContain('aac');
+    expect(joined).toContain('-threads 1');
+    expect(joined).not.toContain('zoompan');
     const seeks = args.reduce<number[]>((acc, value, index) => value === '-ss' ? [...acc, index] : acc, []);
     expect(seeks).toHaveLength(1);
     expect(seeks[0]).toBeLessThan(args.indexOf('-i'));
@@ -27,7 +29,7 @@ describe('ffmpeg render command', () => {
       startSeconds: 10, endSeconds: 40, title: 'x', hook: 'x', reason: 'x', socialCaption: 'copy', hashtags: ['#x'], emphasisTerms: ['riesgo'], score: 80,
     }, { sourceWidth: 1920, sourceHeight: 1080, hook: 'x', captionStyle: 'pulse' });
     const joined = args.join(' ');
-    expect(joined).toContain('gblur=sigma=32');
+    expect(joined).toContain('gblur=sigma=18');
     expect(joined).toContain('overlay=(W-w)/2:(H-h)/2');
   });
 
