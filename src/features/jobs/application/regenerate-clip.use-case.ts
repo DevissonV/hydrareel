@@ -49,12 +49,7 @@ export function replaceWholeText(value: string, from: string, to: string): strin
   const needle = from.trim();
   const replacement = to.trim();
   if (!needle || !replacement) return value;
-  const escaped = needle.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\function nextStyle(current: CaptionStyle): CaptionStyle {
-  if (current === 'pulse') return 'clean';
-  if (current === 'clean') return 'neon';
-  return 'pulse';
-}
-');
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp('(?<![\\p{L}\\p{N}_])' + escaped + '(?![\\p{L}\\p{N}_])', 'giu');
   return value.replace(pattern, replacement);
 }
