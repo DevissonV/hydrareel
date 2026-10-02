@@ -58,14 +58,13 @@ export class RegenerateClipUseCase {
     rawClipIndex: string,
     body: { mode?: unknown; captionStyle?: unknown },
   ) {
-    if (this.busy) throw new BadRequestException('Ya hay una regeneración en curso');
-    this.busy = true;
-
     const clientId = assertUuid(rawClientId, 'clientId');
     const jobId = assertUuid(rawJobId, 'jobId');
     const clipIndex = Number.parseInt(rawClipIndex, 10);
     if (!Number.isInteger(clipIndex) || clipIndex < 1) throw new BadRequestException('clipIndex inválido');
     const mode = assertMode(body.mode);
+    if (this.busy) throw new BadRequestException('Ya hay una regeneración en curso');
+    this.busy = true;
 
     const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
     const dir = path.join(os.tmpdir(), 'hydrareel-regenerate', jobId, String(clipIndex));
@@ -93,6 +92,9 @@ export class RegenerateClipUseCase {
       await mkdir(dir, { recursive: true });
       await this.storage.downloadToFile(manifest.sourceKey, sourcePath);
       const sourceMeta = await this.media.probe(sourcePath);
+      if (!sourceMeta.width || !sourceMeta.height || !sourceMeta.hasAudio) {
+        throw new Error('El source del proyecto no es válido para regenerar');
+      }
 
       const originalCandidate: ClipCandidate = {
         startSeconds: original.startSeconds,
