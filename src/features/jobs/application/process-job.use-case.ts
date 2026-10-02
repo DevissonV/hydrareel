@@ -73,8 +73,8 @@ export class ProcessJobUseCase {
       const brain = await this.clipBrain.select(transcript);
       job.timings.analysisDurationMs = Date.now() - a0;
       job.usage.analysis = brain.usage;
-      if (brain.clips.length < Math.min(3, this.config.maxClipsPerJob)) {
-        throw new Error(`Clip Brain generó ${brain.clips.length}; el smoke MVP requiere 3 clips`);
+      if (brain.clips.length === 0) {
+        throw new Error('Clip Brain no produjo clips válidos');
       }
       jobLog(job.id, 'analysis_completed', { analysisDurationMs: job.timings.analysisDurationMs, candidates: brain.clips.length, model: this.config.openaiClipModel });
 
