@@ -33,6 +33,25 @@ export class LibraryController {
     return this.transcriptCorrection.update(clientId, jobId, body.text);
   }
 
+  @Get(':jobId/clips/:clipIndex/transcript')
+  clipTranscript(
+    @Headers('x-hydra-client-id') clientId: string | undefined,
+    @Param('jobId') jobId: string,
+    @Param('clipIndex') clipIndex: string,
+  ) {
+    return this.transcriptCorrection.getClip(clientId, jobId, clipIndex);
+  }
+
+  @Put(':jobId/clips/:clipIndex/transcript')
+  updateClipTranscript(
+    @Headers('x-hydra-client-id') clientId: string | undefined,
+    @Param('jobId') jobId: string,
+    @Param('clipIndex') clipIndex: string,
+    @Body() body: { text?: unknown },
+  ) {
+    return this.transcriptCorrection.updateClip(clientId, jobId, clipIndex, body.text);
+  }
+
   @Post(':jobId/clips/:clipIndex/regenerate')
   regenerateClip(
     @Headers('x-hydra-client-id') clientId: string | undefined,
