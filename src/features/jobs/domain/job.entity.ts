@@ -4,6 +4,11 @@ export interface JobClip {
   index: number;
   key: string;
   title: string;
+  hook: string;
+  socialCaption: string;
+  hashtags: string[];
+  captionStyle: 'pulse' | 'clean' | 'neon';
+  framing: 'fill' | 'subject-safe';
   durationSeconds: number;
   score: number;
   reason: string;
