@@ -18,7 +18,7 @@ describe('job state machine', () => {
   });
 
   it('bloquea saltos inválidos', () => {
-    const job = new Job('1', 'a.mp4', 'sources/1/source.mp4', 'video/mp4');
+    const job = new Job('1', 'a.mp4', 'sources/1/source.mp4', 'video/mp4', '11111111-1111-4111-8111-111111111111');
     expect(() => job.transition('RENDERING')).toThrow();
   });
 });
