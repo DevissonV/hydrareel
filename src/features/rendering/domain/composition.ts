@@ -47,14 +47,14 @@ const PLATFORM_LAYOUTS: Record<PlatformTarget, Omit<CompositionPlan, 'version' |
     safeZone: { top: 240, right: 220, bottom: 430, left: 72 },
     subjectCorridor: { left: 250, right: 830, top: 430, bottom: 1160 },
     hook: { x: 430, y: 330, maxWidth: 700, maxWords: 10, maxChars: 68, durationSeconds: 2.2 },
-    caption: { x: 430, dialogueY: 1300, emphasisY: 1235, punchlineY: 1160, reactionY: 1210, maxWidth: 700 },
+    caption: { x: 430, dialogueY: 1300, emphasisY: 1235, punchlineY: 1185, reactionY: 1210, maxWidth: 700 },
   },
   reels: {
     platform: 'reels',
     safeZone: { top: 210, right: 165, bottom: 410, left: 68 },
     subjectCorridor: { left: 245, right: 835, top: 400, bottom: 1170 },
     hook: { x: 455, y: 305, maxWidth: 740, maxWords: 10, maxChars: 70, durationSeconds: 2.2 },
-    caption: { x: 455, dialogueY: 1315, emphasisY: 1245, punchlineY: 1170, reactionY: 1220, maxWidth: 740 },
+    caption: { x: 455, dialogueY: 1315, emphasisY: 1245, punchlineY: 1195, reactionY: 1220, maxWidth: 740 },
   },
   shorts: {
     platform: 'shorts',
