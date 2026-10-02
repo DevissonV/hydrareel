@@ -4,7 +4,7 @@ import { MediaModule } from '../media/media.module';
 import { TranscriptionModule } from '../transcription/transcription.module';
 import { ClipBrainModule } from '../clip-brain/clip-brain.module';
 import { RenderingModule } from '../rendering/rendering.module';
-import { JOB_REPOSITORY, InMemoryJobRepository } from './application/job.repository';
+import { JOB_REPOSITORY, DurableJobRepository } from './application/job.repository';
 import { CreateUploadUseCase } from './application/create-upload.use-case';
 import { ProcessJobUseCase } from './application/process-job.use-case';
 import { GetJobUseCase } from './application/get-job.use-case';
@@ -18,8 +18,8 @@ import { RenderGate } from './application/render-gate';
   imports: [StorageModule, MediaModule, TranscriptionModule, ClipBrainModule, RenderingModule],
   controllers: [JobsController, LibraryController],
   providers: [
-    InMemoryJobRepository,
-    { provide: JOB_REPOSITORY, useExisting: InMemoryJobRepository },
+    DurableJobRepository,
+    { provide: JOB_REPOSITORY, useExisting: DurableJobRepository },
     CreateUploadUseCase,
     ProcessJobUseCase,
     GetJobUseCase,
