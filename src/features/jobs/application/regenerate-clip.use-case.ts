@@ -12,6 +12,7 @@ import { JobClip } from '../domain/job.entity';
 import { RenderGate } from './render-gate';
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
 import { normalizeProjectMetrics, ProjectMetrics } from '../domain/project-metrics';
+import { buildLayoutPreflight } from '../../rendering/domain/composition';
 
 type RegenerateMode = 'shorter' | 'longer' | 'alternative' | 'restyle';
 
@@ -185,6 +186,9 @@ export class RegenerateClipUseCase {
           colorPolished: plan.colorPolished,
         },
         captionStyle,
+        captionPolicy: plan.composition?.captionPolicy,
+        platform: plan.composition?.platform ?? 'tiktok',
+        preflight: plan.composition ? buildLayoutPreflight(plan.composition) : undefined,
         framing,
         durationSeconds: outputMeta.durationSeconds,
         score: generated.clip.score,
@@ -332,6 +336,9 @@ export class RegenerateClipUseCase {
             colorPolished: plan.colorPolished,
           },
           captionStyle,
+          captionPolicy: plan.composition?.captionPolicy,
+          platform: plan.composition?.platform ?? 'tiktok',
+          preflight: plan.composition ? buildLayoutPreflight(plan.composition) : undefined,
           framing,
           durationSeconds: outputMeta.durationSeconds,
           captionCueCount,

@@ -13,6 +13,7 @@ import { RENDERING_PORT, RenderingPort } from '../../rendering/application/rende
 import { validateMediaDuration } from './input-validation';
 import { RenderGate } from './render-gate';
 import { emptyProjectMetrics } from '../domain/project-metrics';
+import { buildLayoutPreflight } from '../../rendering/domain/composition';
 
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
@@ -159,6 +160,7 @@ export class ProcessJobUseCase implements OnModuleInit {
           captionStyle,
           captionPolicy: plan.composition?.captionPolicy,
           platform: plan.composition?.platform ?? 'tiktok',
+          preflight: plan.composition ? buildLayoutPreflight(plan.composition) : undefined,
           framing,
           durationSeconds: outputMeta.durationSeconds,
           score: clip.score,
@@ -182,6 +184,7 @@ export class ProcessJobUseCase implements OnModuleInit {
             captionPolicy: plan.composition?.captionPolicy,
             visualIdentity: captionStyle,
             platform: plan.composition?.platform ?? 'tiktok',
+            preflight: plan.composition ? buildLayoutPreflight(plan.composition).status : undefined,
           },
         });
       }

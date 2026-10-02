@@ -1,4 +1,5 @@
 import { assertTransition, JobStatus, isTerminal } from './job-status';
+import { LayoutPreflightReport } from '../../rendering/domain/composition';
 
 export interface JobClip {
   index: number;
@@ -18,6 +19,7 @@ export interface JobClip {
   captionStyle: 'pulse' | 'clean' | 'neon';
   captionPolicy?: 'FULL' | 'REDUCED' | 'KEY_MOMENTS' | 'HOOK_ONLY' | 'NONE';
   platform?: 'tiktok' | 'reels' | 'shorts';
+  preflight?: LayoutPreflightReport;
   framing: 'fill' | 'subject-safe';
   durationSeconds: number;
   score: number;

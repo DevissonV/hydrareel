@@ -6,6 +6,19 @@ export type CaptionPolicy = 'FULL' | 'REDUCED' | 'KEY_MOMENTS' | 'HOOK_ONLY' | '
 export type EditorialRole = 'DIALOGUE' | 'EMPHASIS' | 'PUNCHLINE' | 'REACTION';
 export type VisualIdentity = 'pulse' | 'clean' | 'neon';
 
+export interface LayoutPreflightCheck {
+  id: 'HOOK_SAFE' | 'CAPTION_SAFE' | 'RIGHT_RAIL_CLEAR' | 'BOTTOM_UI_CLEAR' | 'SUBJECT_CORRIDOR_CLEAR';
+  label: string;
+  passed: boolean;
+}
+
+export interface LayoutPreflightReport {
+  version: 'layout-preflight-v1';
+  platform: PlatformTarget;
+  status: 'PASS' | 'WARN';
+  checks: LayoutPreflightCheck[];
+}
+
 export interface CompositionPlan {
   version: 'adaptive-editorial-v1';
   platform: PlatformTarget;
@@ -177,6 +190,62 @@ export function shouldRenderCue(
   if (policy === 'FULL') return true;
   if (policy === 'KEY_MOMENTS') return role !== 'DIALOGUE';
   return role !== 'DIALOGUE' || index % 2 === 0;
+}
+
+export function buildLayoutPreflight(plan: CompositionPlan): LayoutPreflightReport {
+  const rightLimit = 1080 - plan.safeZone.right;
+  const bottomLimit = 1920 - plan.safeZone.bottom;
+  const hookLeft = plan.hook.x - plan.hook.maxWidth / 2;
+  const hookRight = plan.hook.x + plan.hook.maxWidth / 2;
+  const captionLeft = plan.caption.x - plan.caption.maxWidth / 2;
+  const captionRight = plan.caption.x + plan.caption.maxWidth / 2;
+  const captionYs = [
+    plan.caption.dialogueY,
+    plan.caption.emphasisY,
+    plan.caption.punchlineY,
+    plan.caption.reactionY,
+  ];
+
+  const checks: LayoutPreflightCheck[] = [
+    {
+      id: 'HOOK_SAFE',
+      label: 'Hook dentro de zona segura',
+      passed:
+        plan.hook.y >= plan.safeZone.top &&
+        hookLeft >= plan.safeZone.left &&
+        hookRight <= rightLimit,
+    },
+    {
+      id: 'CAPTION_SAFE',
+      label: 'Subtítulos dentro de zona segura',
+      passed:
+        captionLeft >= plan.safeZone.left &&
+        captionRight <= rightLimit &&
+        captionYs.every((y) => y < bottomLimit),
+    },
+    {
+      id: 'RIGHT_RAIL_CLEAR',
+      label: 'Rail derecho de la plataforma despejado',
+      passed: hookRight <= rightLimit && captionRight <= rightLimit,
+    },
+    {
+      id: 'BOTTOM_UI_CLEAR',
+      label: 'Descripción y audio no tapan texto',
+      passed: captionYs.every((y) => y < bottomLimit),
+    },
+    {
+      id: 'SUBJECT_CORRIDOR_CLEAR',
+      label: 'Texto fuera del corredor principal del sujeto',
+      passed: captionYs.every((y) => y > plan.subjectCorridor.bottom),
+    },
+  ];
+
+  return {
+    version: 'layout-preflight-v1',
+    platform: plan.platform,
+    status: checks.every((check) => check.passed) ? 'PASS' : 'WARN',
+    checks,
+  };
 }
 
 export function assertCompositionSafe(plan: CompositionPlan): void {
