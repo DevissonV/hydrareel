@@ -314,7 +314,15 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     );
 
     const bounds = wordSafeBounds(transcript, parsed.startSegmentIndex, parsed.endSegmentIndex);
-    if (!bounds) throw new Error('No se pudo obtener un corte coherente para la regeneración');
+    if (!bounds) {
+      if (mode === 'shorter') {
+        const min = Math.max(8, Math.min(policy.minSeconds, originalDuration * 0.45));
+        const max = Math.max(min, Math.min(policy.maxSeconds, originalDuration * 0.9));
+        const fallback = deterministicShorter(transcript, original, min, max);
+        if (fallback) return { clip: fallback, usage: { editorialRegeneration: usage, fallback: 'deterministic_shorter' } };
+      }
+      throw new Error('No se pudo obtener un corte coherente para la regeneración');
+    }
 
     const candidate = {
       startSeconds: bounds.startSeconds,
@@ -344,7 +352,19 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       transcript.duration,
       1,
     );
-    if (!normalized.length) throw new Error('La regeneración no produjo un clip válido');
+    if (!normalized.length) {
+      if (mode === 'shorter') {
+        const fallback = deterministicShorter(transcript, original, min, max);
+        if (fallback) {
+          return {
+            clip: fallback,
+            usage: { editorialRegeneration: usage, fallback: 'deterministic_shorter' },
+          };
+        }
+        throw new Error('Este clip ya está cerca de la duración mínima');
+      }
+      throw new Error('La regeneración no produjo un clip válido');
+    }
     return { clip: normalized[0], usage };
   }
 }
