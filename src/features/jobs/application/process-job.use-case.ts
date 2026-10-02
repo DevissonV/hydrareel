@@ -123,11 +123,21 @@ export class ProcessJobUseCase {
         usage: job.usage,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const publicMessage =
+        rawMessage.includes('"code"') || rawMessage.length > 500
+          ? 'No pudimos validar la selección editorial. Intenta de nuevo con el mismo video.'
+          : rawMessage;
       job.timings.totalDurationMs = Date.now() - started;
-      job.fail(job.status, message);
+      job.fail(job.status, publicMessage);
       await this.jobs.save(job);
-      jobLog(job.id, 'job_failed', { sourceDuration: job.sourceDuration, ...job.timings, clipsGenerated: job.clips.length, failureStage: job.failureStage, error: message });
+      jobLog(job.id, 'job_failed', {
+        sourceDuration: job.sourceDuration,
+        ...job.timings,
+        clipsGenerated: job.clips.length,
+        failureStage: job.failureStage,
+        error: rawMessage,
+      });
     } finally {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
