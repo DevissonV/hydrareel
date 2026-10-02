@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import {
+  CaptionOptions,
   CaptionStyle,
   MagicEditPlan,
   RenderingPort,
@@ -9,6 +10,14 @@ import {
 } from '../application/rendering.port';
 import { Transcript, TranscriptWord } from '../../transcription/domain/transcript';
 import { ClipCandidate } from '../../clip-brain/domain/clip-candidate';
+import {
+  buildCompositionPlan,
+  CompositionPlan,
+  EditorialRole,
+  editorialRoleForCue,
+  PlatformTarget,
+  shouldRenderCue,
+} from '../domain/composition';
 
 function run(command: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -59,11 +68,22 @@ function emphasisTokens(terms: string[]): Set<string> {
 }
 
 function wrapTokens(tokens: string[]): string {
-  if (tokens.length <= 3) return tokens.join(' ');
+  if (tokens.length <= 2) return tokens.join(' ');
   const visible = tokens.join(' ').replace(/\{[^}]+\}/g, '');
-  if (visible.length <= 28) return tokens.join(' ');
-  const middle = Math.ceil(tokens.length / 2);
-  return `${tokens.slice(0, middle).join(' ')}\\N${tokens.slice(middle).join(' ')}`;
+  if (visible.length <= 22) return tokens.join(' ');
+
+  let bestBreak = 1;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < tokens.length; i += 1) {
+    const left = tokens.slice(0, i).join(' ').replace(/\{[^}]+\}/g, '').length;
+    const right = tokens.slice(i).join(' ').replace(/\{[^}]+\}/g, '').length;
+    const delta = Math.abs(left - right);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestBreak = i;
+    }
+  }
+  return `${tokens.slice(0, bestBreak).join(' ')}\\N${tokens.slice(bestBreak).join(' ')}`;
 }
 
 function wrapWords(words: string[]): string {
@@ -127,7 +147,11 @@ function mapSourceToOutput(sourceTime: number, plan: MagicEditPlan): number {
   return plan.outputDuration;
 }
 
-export function buildMagicEditPlan(transcript: Transcript, clip: ClipCandidate): MagicEditPlan {
+export function buildMagicEditPlan(
+  transcript: Transcript,
+  clip: ClipCandidate,
+  platform: PlatformTarget = 'tiktok',
+): MagicEditPlan {
   const inside = transcript.words.filter(
     (word) => word.end > clip.startSeconds && word.start < clip.endSeconds,
   );
@@ -186,6 +210,7 @@ export function buildMagicEditPlan(transcript: Transcript, clip: ClipCandidate):
     outputDuration: Number(outputCursor.toFixed(3)),
     audioPolished: true,
     colorPolished: true,
+    composition: buildCompositionPlan(transcript, clip, platform),
   };
 }
 
@@ -214,11 +239,22 @@ function semanticPhrase(cue: CaptionCue, terms: string[], style: CaptionStyle): 
   }));
 }
 
-function hookPresentation(hook: string): { text: string; fontSize: number } {
-  const words = hook.trim().split(/\s+/).filter(Boolean).slice(0, 14);
+function hookPresentation(
+  hook: string,
+  maxWords: number,
+  maxChars: number,
+): { text: string; fontSize: number } {
+  const rawWords = hook.trim().split(/\s+/).filter(Boolean).slice(0, maxWords);
+  const words: string[] = [];
+  for (const word of rawWords) {
+    const projected = [...words, word].join(' ');
+    if (projected.length > maxChars && words.length >= 3) break;
+    words.push(word);
+  }
+
   const visible = words.join(' ');
-  const fontSize = visible.length <= 42 ? 54 : visible.length <= 68 ? 47 : 40;
-  if (words.length <= 5 || visible.length <= 34) {
+  const fontSize = visible.length <= 34 ? 52 : visible.length <= 52 ? 46 : 40;
+  if (words.length <= 4 || visible.length <= 30) {
     return { text: words.map(escapeAss).join(' '), fontSize };
   }
 
@@ -238,6 +274,27 @@ function hookPresentation(hook: string): { text: string; fontSize: number } {
     text: `${words.slice(0, bestBreak).map(escapeAss).join(' ')}\\N${words.slice(bestBreak).map(escapeAss).join(' ')}`,
     fontSize,
   };
+}
+
+function roleStyle(role: EditorialRole): string {
+  if (role === 'EMPHASIS') return 'HydraEmphasis';
+  if (role === 'PUNCHLINE') return 'HydraPunchline';
+  if (role === 'REACTION') return 'HydraReaction';
+  return 'HydraDialogue';
+}
+
+function roleY(composition: CompositionPlan, role: EditorialRole): number {
+  if (role === 'EMPHASIS') return composition.caption.emphasisY;
+  if (role === 'PUNCHLINE') return composition.caption.punchlineY;
+  if (role === 'REACTION') return composition.caption.reactionY;
+  return composition.caption.dialogueY;
+}
+
+function roleMotion(role: EditorialRole): string {
+  if (role === 'PUNCHLINE') return '{\\fad(35,90)\\fscx116\\fscy116\\t(0,150,\\fscx100\\fscy100)}';
+  if (role === 'EMPHASIS') return '{\\fad(45,70)\\fscx108\\fscy108\\t(0,130,\\fscx100\\fscy100)}';
+  if (role === 'REACTION') return '{\\fad(40,80)\\fscx110\\fscy110\\t(0,140,\\fscx100\\fscy100)}';
+  return '{\\fad(45,65)}';
 }
 
 function punchExpression(plan: MagicEditPlan): string | undefined {
@@ -328,20 +385,41 @@ export function buildRenderArgs(
 
 @Injectable()
 export class FfmpegRenderingAdapter implements RenderingPort {
-  createPlan(transcript: Transcript, clip: ClipCandidate): MagicEditPlan {
-    return buildMagicEditPlan(transcript, clip);
+  createPlan(
+    transcript: Transcript,
+    clip: ClipCandidate,
+    platform: PlatformTarget = 'tiktok',
+  ): MagicEditPlan {
+    return buildMagicEditPlan(transcript, clip, platform);
   }
 
   async writeSubtitles(
     path: string,
     transcript: Transcript,
     clip: ClipCandidate,
-    options: { hook?: string; captionStyle?: CaptionStyle; plan?: MagicEditPlan },
+    options: CaptionOptions,
   ): Promise<number> {
-    const style = options.captionStyle ?? 'pulse';
-    const palette = captionPalette(style);
-    const plan = options.plan ?? buildMagicEditPlan(transcript, clip);
-    const cues = buildCaptionCues(transcript.words, clip);
+    const plan = options.plan ?? buildMagicEditPlan(transcript, clip, options.platform ?? 'tiktok');
+    const composition = plan.composition ?? buildCompositionPlan(
+      transcript,
+      clip,
+      options.platform ?? 'tiktok',
+    );
+    const style = options.captionStyle ?? composition.identity;
+    const allCues = buildCaptionCues(transcript.words, clip);
+    const hookEnd = options.hook?.trim()
+      ? Math.min(composition.hook.durationSeconds, plan.outputDuration)
+      : 0;
+    const cues = allCues
+      .map((cue, index) => ({
+        cue,
+        index,
+        role: editorialRoleForCue(cue.words, cue.start, cue.end, clip),
+      }))
+      .filter(({ cue, index, role }) =>
+        shouldRenderCue(composition.captionPolicy, role, index) &&
+        cue.start >= hookEnd + 0.12,
+      );
 
     const header = `[Script Info]
 ScriptType: v4.00+
@@ -352,38 +430,46 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: HydraCaption,DejaVu Sans,${palette.fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H30000000,-1,0,0,0,100,100,0,0,1,${palette.outline},${palette.shadow},2,82,82,330,1
-Style: HydraHook,DejaVu Sans,54,&H00FFFFFF,&H00FFFFFF,&H00110B1D,&H8A0B0817,-1,0,0,0,100,100,0,0,3,3,0,8,100,100,150,1
+Style: HydraDialogue,DejaVu Sans,56,&H00FFFFFF,&H00FFFFFF,&H00000000,&H20000000,-1,0,0,0,100,100,0,0,1,4,0.6,2,72,220,420,1
+Style: HydraEmphasis,DejaVu Sans,64,&H00FFFFFF,&H00FFFFFF,&H00000000,&H22000000,-1,0,0,0,100,100,0,0,1,5,0.8,2,72,220,420,1
+Style: HydraPunchline,DejaVu Sans,72,&H00FFFFFF,&H00FFFFFF,&H00000000,&H26000000,-1,0,0,0,100,100,0,0,1,6,1.0,2,72,220,420,1
+Style: HydraReaction,DejaVu Sans,66,&H00FFFFFF,&H00FFFFFF,&H00000000,&H22000000,-1,0,0,0,100,100,0,0,1,5,0.8,2,72,220,420,1
+Style: HydraHook,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00110B1D,&H620B0817,-1,0,0,0,100,100,0,0,3,3,0,8,72,220,240,1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 `;
 
     const events: string[] = [];
-    if (options.hook?.trim()) {
-      const hookEnd = Math.min(3.0, plan.outputDuration);
-      if (hookEnd > 0.5) {
-        const hook = hookPresentation(options.hook);
-        events.push(
-          `Dialogue: 1,0:00:00.00,${assTime(hookEnd)},HydraHook,,0,0,0,,{\\fs${hook.fontSize}\\fad(120,180)}${hook.text}`,
-        );
-      }
+    if (options.hook?.trim() && hookEnd > 0.5) {
+      const hook = hookPresentation(
+        options.hook,
+        composition.hook.maxWords,
+        composition.hook.maxChars,
+      );
+      events.push(
+        `Dialogue: 1,0:00:00.00,${assTime(hookEnd)},HydraHook,,0,0,0,,{\\an8\\pos(${composition.hook.x},${composition.hook.y})\\fs${hook.fontSize}\\fad(100,160)}${hook.text}`,
+      );
     }
 
-    for (const cue of cues) {
+    let renderedCueCount = 0;
+    for (const item of cues) {
+      const cue = item.cue;
       const sourceStart = clip.startSeconds + cue.start;
       const sourceEnd = clip.startSeconds + cue.end;
       const start = mapSourceToOutput(sourceStart, plan);
       const end = mapSourceToOutput(sourceEnd, plan);
       if (end <= start + 0.04) continue;
+      const y = roleY(composition, item.role);
       events.push(
-        `Dialogue: 0,${assTime(start)},${assTime(end)},HydraCaption,,0,0,0,,{\\fad(55,70)\\fscx104\\fscy104\\t(0,120,\\fscx100\\fscy100)}${semanticPhrase(cue, plan.emphasisTerms, style)}`,
+        `Dialogue: 0,${assTime(start)},${assTime(end)},${roleStyle(item.role)},,0,0,0,,{\\an2\\pos(${composition.caption.x},${y})}${roleMotion(item.role)}${semanticPhrase(cue, plan.emphasisTerms, style)}`,
       );
+      renderedCueCount += 1;
     }
 
     if (!events.length) throw new Error('No hay timestamps para generar subtítulos');
     await writeFile(path, header + events.join('\n') + '\n', 'utf8');
-    return cues.length;
+    return renderedCueCount;
   }
 
   async render(
