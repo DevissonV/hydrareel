@@ -218,6 +218,36 @@ export class LibraryUseCase {
     };
   }
 
+  async file(
+    rawClientId: string | undefined,
+    rawJobId: string,
+    rawClipIndex: string,
+  ) {
+    const clientId = assertUuid(rawClientId, 'clientId');
+    const jobId = assertUuid(rawJobId, 'jobId');
+    const clipIndex = Number.parseInt(rawClipIndex, 10);
+    if (!Number.isInteger(clipIndex) || clipIndex < 1) throw new BadRequestException('clipIndex inválido');
+
+    const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
+    let manifest: LibraryManifest;
+    try {
+      manifest = await this.storage.getJson<LibraryManifest>(manifestKey);
+    } catch {
+      throw new NotFoundException('Proyecto no encontrado');
+    }
+    if (manifest.clientId !== clientId || manifest.id !== jobId) {
+      throw new NotFoundException('Proyecto no encontrado');
+    }
+
+    const clip = manifest.clips.find((item) => item.index === clipIndex);
+    if (!clip) throw new NotFoundException('Clip no encontrado');
+
+    return {
+      stream: await this.storage.openReadStream(clip.key),
+      fileName: `hydrareel-clip-${String(clip.index).padStart(2, '0')}.mp4`,
+    };
+  }
+
   async delete(rawClientId: string | undefined, rawJobId: string) {
     const clientId = assertUuid(rawClientId, 'clientId');
     const jobId = assertUuid(rawJobId, 'jobId');
