@@ -16,7 +16,7 @@ export class CreateUploadUseCase {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
-  async execute(fileName: string, contentType: string) {
+  async execute(fileName: string, contentType: string, requestedClientId?: string) {
     if (this.creating) throw new ConflictException('Ya se está iniciando otro job');
     this.creating = true;
     try {
@@ -25,12 +25,16 @@ export class CreateUploadUseCase {
       }
       const { extension } = validateUploadInput(fileName, contentType);
       const id = randomUUID();
+      const clientId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedClientId ?? '')
+        ? requestedClientId!
+        : randomUUID();
       const sourceKey = `sources/${id}/source.${extension}`;
-      const job = new Job(id, fileName, sourceKey, contentType || 'application/octet-stream');
+      const job = new Job(id, fileName, sourceKey, contentType || 'application/octet-stream', clientId);
       await this.jobs.save(job);
       const uploadUrl = await this.storage.createUploadUrl(sourceKey, job.contentType);
       return {
         jobId: id,
+        clientId,
         uploadUrl,
         method: 'PUT',
         headers: { 'Content-Type': job.contentType },
