@@ -16,9 +16,9 @@ function run(command: string, args: string[]): Promise<void> {
     let stderr = '';
     child.stderr.on('data', (chunk) => { stderr += String(chunk); });
     child.once('error', reject);
-    child.once('close', (code) => code === 0
+    child.once('close', (code, signal) => code === 0
       ? resolve()
-      : reject(new Error(`${command} exited ${code}: ${stderr.slice(-3500)}`)));
+      : reject(new Error(`${command} failed (${signal ?? `exit ${code}`}): ${stderr.slice(-3500)}`)));
   });
 }
 
@@ -175,29 +175,7 @@ export function buildMagicEditPlan(transcript: Transcript, clip: ClipCandidate):
   );
 
   const terms = clip.emphasisTerms ?? [];
-  const tokens = emphasisTokens(terms);
   const punchIns: Array<{ start: number; end: number }> = [];
-
-  for (const word of inside) {
-    if (punchIns.length >= 3) break;
-    if (!tokens.has(normalizeWord(word.word))) continue;
-    const mapped = mapSourceToOutput(word.start, {
-      segments,
-      silenceCuts: cutRanges.length,
-      removedSeconds,
-      punchIns: [],
-      emphasisTerms: terms,
-      outputDuration: outputCursor,
-      audioPolished: true,
-      colorPolished: true,
-    });
-    if (mapped < 2.2 || mapped > outputCursor - 1) continue;
-    if (punchIns.some((event) => Math.abs(event.start - mapped) < 3.8)) continue;
-    punchIns.push({
-      start: Math.max(0, mapped - 0.18),
-      end: Math.min(outputCursor, mapped + 1.05),
-    });
-  }
 
   return {
     segments,
@@ -302,7 +280,7 @@ export function buildRenderArgs(
 
   if (subjectSafe) {
     filters.push('[basev]split=2[bg][fg]');
-    filters.push('[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=32[bg2]');
+    filters.push('[bg]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,gblur=sigma=18,scale=1080:1920[bg2]');
     filters.push('[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2]');
     filters.push('[bg2][fg2]overlay=(W-w)/2:(H-h)/2[framed]');
   } else {
@@ -311,20 +289,12 @@ export function buildRenderArgs(
 
   filters.push('[framed]eq=contrast=1.035:saturation=1.045:brightness=0.004,unsharp=5:5:0.22:5:5:0[look]');
 
-  const expression = punchExpression(plan);
-  if (expression) {
-    filters.push(
-      `[look]zoompan=z='1+0.065*(${expression})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30[punch]`,
-    );
-  } else {
-    filters.push('[look]null[punch]');
-  }
-
-  filters.push(`[punch]subtitles='${escapeSubtitlePath(subtitlesPath)}'[v]`);
+  filters.push(`[look]subtitles='${escapeSubtitlePath(subtitlesPath)}'[v]`);
   filters.push('[basea]aresample=async=1:first_pts=0,highpass=f=70,acompressor=threshold=0.10:ratio=2.4:attack=20:release=250:makeup=1.35,loudnorm=I=-16:TP=-1.5:LRA=11[a]');
 
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
+    '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1',
     '-ss', coarseStart.toFixed(3),
     '-i', source,
     '-filter_complex', filters.join(';'),
