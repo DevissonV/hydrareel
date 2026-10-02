@@ -6,5 +6,9 @@ export interface ObjectStoragePort {
   downloadToFile(key: string, destination: string): Promise<void>;
   uploadFile(key: string, source: string, contentType: string): Promise<void>;
   putJson(key: string, value: unknown): Promise<void>;
+  getJson<T>(key: string): Promise<T>;
+  listKeys(prefix: string): Promise<string[]>;
+  deleteKeys(keys: string[]): Promise<void>;
+  deletePrefix(prefix: string): Promise<number>;
   health(): Promise<boolean>;
 }
