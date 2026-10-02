@@ -7,6 +7,14 @@ export interface JobClip {
   hook: string;
   socialCaption: string;
   hashtags: string[];
+  emphasisTerms: string[];
+  magicEdit: {
+    silenceCuts: number;
+    removedSeconds: number;
+    punchIns: number;
+    audioPolished: boolean;
+    colorPolished: boolean;
+  };
   captionStyle: 'pulse' | 'clean' | 'neon';
   framing: 'fill' | 'subject-safe';
   durationSeconds: number;
