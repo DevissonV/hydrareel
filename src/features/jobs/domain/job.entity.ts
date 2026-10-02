@@ -16,6 +16,8 @@ export interface JobClip {
     colorPolished: boolean;
   };
   captionStyle: 'pulse' | 'clean' | 'neon';
+  captionPolicy?: 'FULL' | 'REDUCED' | 'KEY_MOMENTS' | 'HOOK_ONLY' | 'NONE';
+  platform?: 'tiktok' | 'reels' | 'shorts';
   framing: 'fill' | 'subject-safe';
   durationSeconds: number;
   score: number;

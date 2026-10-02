@@ -118,12 +118,13 @@ export class ProcessJobUseCase implements OnModuleInit {
         const number = String(index + 1).padStart(2, '0');
         const subtitlesPath = path.join(dir, `clip-${number}.ass`);
         const outputPath = path.join(dir, `clip-${number}.mp4`);
-        const captionStyle = 'pulse' as const;
         const framing = sourceMeta.width / sourceMeta.height > 0.82 ? 'subject-safe' as const : 'fill' as const;
-        const plan = this.rendering.createPlan(transcript, clip);
+        const plan = this.rendering.createPlan(transcript, clip, 'tiktok');
+        const captionStyle = plan.composition?.identity ?? 'clean';
         const captionCueCount = await this.rendering.writeSubtitles(subtitlesPath, transcript, clip, {
           hook: clip.hook,
           captionStyle,
+          platform: 'tiktok',
           plan,
         });
         await this.rendering.render(sourcePath, outputPath, subtitlesPath, clip, {
@@ -131,6 +132,7 @@ export class ProcessJobUseCase implements OnModuleInit {
           sourceHeight: sourceMeta.height,
           hook: clip.hook,
           captionStyle,
+          platform: 'tiktok',
           plan,
         });
         const outputMeta = await this.media.probe(outputPath);
@@ -155,6 +157,8 @@ export class ProcessJobUseCase implements OnModuleInit {
             colorPolished: plan.colorPolished,
           },
           captionStyle,
+          captionPolicy: plan.composition?.captionPolicy,
+          platform: plan.composition?.platform ?? 'tiktok',
           framing,
           durationSeconds: outputMeta.durationSeconds,
           score: clip.score,
@@ -175,6 +179,9 @@ export class ProcessJobUseCase implements OnModuleInit {
             removedSeconds: plan.removedSeconds,
             punchIns: plan.punchIns.length,
             emphasisTerms: plan.emphasisTerms.length,
+            captionPolicy: plan.composition?.captionPolicy,
+            visualIdentity: captionStyle,
+            platform: plan.composition?.platform ?? 'tiktok',
           },
         });
       }

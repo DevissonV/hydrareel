@@ -1,9 +1,14 @@
 import { ClipCandidate } from '../../clip-brain/domain/clip-candidate';
 import { Transcript } from '../../transcription/domain/transcript';
+import {
+  CompositionPlan,
+  PlatformTarget,
+  VisualIdentity,
+} from '../domain/composition';
 
 export const RENDERING_PORT = Symbol('RENDERING_PORT');
 
-export type CaptionStyle = 'pulse' | 'clean' | 'neon';
+export type CaptionStyle = VisualIdentity;
 
 export interface EditSegment {
   sourceStart: number;
@@ -26,6 +31,7 @@ export interface MagicEditPlan {
   outputDuration: number;
   audioPolished: boolean;
   colorPolished: boolean;
+  composition?: CompositionPlan;
 }
 
 export interface RenderOptions {
@@ -33,17 +39,23 @@ export interface RenderOptions {
   sourceHeight: number;
   hook?: string;
   captionStyle?: CaptionStyle;
+  platform?: PlatformTarget;
   plan?: MagicEditPlan;
 }
 
 export interface CaptionOptions {
   hook?: string;
   captionStyle?: CaptionStyle;
+  platform?: PlatformTarget;
   plan?: MagicEditPlan;
 }
 
 export interface RenderingPort {
-  createPlan(transcript: Transcript, clip: ClipCandidate): MagicEditPlan;
+  createPlan(
+    transcript: Transcript,
+    clip: ClipCandidate,
+    platform?: PlatformTarget,
+  ): MagicEditPlan;
   render(
     source: string,
     destination: string,
