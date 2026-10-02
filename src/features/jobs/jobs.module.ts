@@ -13,6 +13,7 @@ import { LibraryController } from './presentation/library.controller';
 import { LibraryUseCase } from './application/library.use-case';
 import { RegenerateClipUseCase } from './application/regenerate-clip.use-case';
 import { RenderGate } from './application/render-gate';
+import { TranscriptCorrectionUseCase } from './application/transcript-correction.use-case';
 
 @Module({
   imports: [StorageModule, MediaModule, TranscriptionModule, ClipBrainModule, RenderingModule],
@@ -26,6 +27,7 @@ import { RenderGate } from './application/render-gate';
     LibraryUseCase,
     RegenerateClipUseCase,
     RenderGate,
+    TranscriptCorrectionUseCase,
   ],
 })
 export class JobsModule {}
