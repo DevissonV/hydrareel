@@ -23,16 +23,16 @@ describe('clip policy and candidate validation', () => {
 
   it('permite devolver menos clips que el máximo si solo hay uno bueno', () => {
     const result = validateAndNormalizeCandidates({ clips: [
-      { startSeconds: 10, endSeconds: 26, title: 'Único momento fuerte', hook: 'h', reason: 'r', socialCaption: 'copy', hashtags: ['#uno'], score: 90 }
+      { startSeconds: 10, endSeconds: 26, title: 'Único momento fuerte', hook: 'h', reason: 'r', socialCaption: 'copy', hashtags: ['#uno'], emphasisTerms: ['momento'], score: 90 }
     ]}, 8, 30, 46.2, 3);
     expect(result).toHaveLength(1);
   });
 
   it('filtra duración y solapamientos', () => {
     const result = validateAndNormalizeCandidates({ clips: [
-      { startSeconds: 10, endSeconds: 40, title: 'A', hook: 'h', reason: 'r', socialCaption: 'copy A', hashtags: ['#a'], score: 90 },
-      { startSeconds: 20, endSeconds: 50, title: 'B', hook: 'h', reason: 'r', socialCaption: 'copy B', hashtags: ['#b'], score: 80 },
-      { startSeconds: 70, endSeconds: 100, title: 'C', hook: 'h', reason: 'r', socialCaption: 'copy C', hashtags: ['#c'], score: 70 }
+      { startSeconds: 10, endSeconds: 40, title: 'A', hook: 'h', reason: 'r', socialCaption: 'copy A', hashtags: ['#a'], emphasisTerms: ['A'], score: 90 },
+      { startSeconds: 20, endSeconds: 50, title: 'B', hook: 'h', reason: 'r', socialCaption: 'copy B', hashtags: ['#b'], emphasisTerms: [], score: 80 },
+      { startSeconds: 70, endSeconds: 100, title: 'C', hook: 'h', reason: 'r', socialCaption: 'copy C', hashtags: ['#c'], emphasisTerms: ['C'], score: 70 }
     ]}, 20, 60, 200, 3);
     expect(result).toHaveLength(2);
     expect(result.map(x => x.title)).toEqual(['A','C']);
@@ -47,6 +47,7 @@ describe('clip policy and candidate validation', () => {
       reason: 'R'.repeat(600),
       socialCaption: 'C'.repeat(900),
       hashtags: ['#uno', '#dos'],
+      emphasisTerms: ['dinero', 'riesgo'],
       score: 80,
     }] }, 8, 30, 60, 3);
     expect(result[0].title).toHaveLength(120);
@@ -54,6 +55,7 @@ describe('clip policy and candidate validation', () => {
     expect(result[0].reason).toHaveLength(300);
     expect(result[0].socialCaption).toHaveLength(600);
     expect(result[0].hashtags).toEqual(['#uno', '#dos']);
+    expect(result[0].emphasisTerms).toEqual(['dinero', 'riesgo']);
   });
 
   it('rechaza JSON inválido', () => {
