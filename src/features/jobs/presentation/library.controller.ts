@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, StreamableFile } from '@nestjs/common';
 import { LibraryUseCase } from '../application/library.use-case';
 import { RegenerateClipUseCase } from '../application/regenerate-clip.use-case';
 import { TranscriptCorrectionUseCase } from '../application/transcript-correction.use-case';
@@ -36,6 +36,19 @@ export class LibraryController {
     @Body() body: { text?: unknown },
   ) {
     return this.transcriptCorrection.update(clientId, jobId, body.text);
+  }
+
+  @Get(':jobId/clips/:clipIndex/file')
+  async clipFile(
+    @Headers('x-hydra-client-id') clientId: string | undefined,
+    @Param('jobId') jobId: string,
+    @Param('clipIndex') clipIndex: string,
+  ) {
+    const file = await this.library.file(clientId, jobId, clipIndex);
+    return new StreamableFile(file.stream, {
+      type: 'video/mp4',
+      disposition: `inline; filename="${file.fileName}"`,
+    });
   }
 
   @Get(':jobId/clips/:clipIndex/download')
