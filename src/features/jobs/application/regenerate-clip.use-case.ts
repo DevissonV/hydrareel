@@ -69,6 +69,9 @@ export class RegenerateClipUseCase {
     const clipIndex = Number.parseInt(rawClipIndex, 10);
     if (!Number.isInteger(clipIndex) || clipIndex < 1) throw new BadRequestException('clipIndex inválido');
     const mode = assertMode(body.mode);
+    const started = Date.now();
+    let manifestForMetrics: LibraryManifest | undefined;
+    let requestRecorded = false;
     if (this.busy) throw new ConflictException('Hydra ya está ajustando otro clip.');
     const releaseRender = this.renderGate.tryAcquire(`regenerate:${jobId}:${clipIndex}`);
     if (!releaseRender) {
@@ -90,6 +93,12 @@ export class RegenerateClipUseCase {
         throw new NotFoundException('Proyecto no encontrado');
       }
       if (manifest.clientId !== clientId || manifest.id !== jobId) throw new NotFoundException('Proyecto no encontrado');
+      manifestForMetrics = manifest;
+      const requestMetrics = normalizeProjectMetrics(manifest.metrics);
+      requestMetrics.regenerationRequests[mode] += 1;
+      manifest.metrics = requestMetrics;
+      await this.storage.putJson(manifestKey, manifest);
+      requestRecorded = true;
 
       const original = manifest.clips.find((clip) => clip.index === clipIndex);
       if (!original) throw new NotFoundException('Clip no encontrado');
@@ -184,6 +193,10 @@ export class RegenerateClipUseCase {
 
       manifest.clips = manifest.clips.map((clip) => clip.index === clipIndex ? updated : clip);
       manifest.completedAt = new Date().toISOString();
+      const successMetrics = normalizeProjectMetrics(manifest.metrics);
+      successMetrics.regenerationSucceeded += 1;
+      successMetrics.regenerationDurationMs += Date.now() - started;
+      manifest.metrics = successMetrics;
       await this.storage.putJson(manifestKey, manifest);
       if (original.key !== key) await this.storage.deleteKeys([original.key]).catch(() => undefined);
 
@@ -191,6 +204,15 @@ export class RegenerateClipUseCase {
         ...updated,
         url: await this.storage.createDownloadUrl(updated.key),
       };
+    } catch (error) {
+      if (manifestForMetrics && requestRecorded) {
+        const failureMetrics = normalizeProjectMetrics(manifestForMetrics.metrics);
+        failureMetrics.regenerationFailed += 1;
+        failureMetrics.regenerationDurationMs += Date.now() - started;
+        manifestForMetrics.metrics = failureMetrics;
+        await this.storage.putJson(manifestKey, manifestForMetrics).catch(() => undefined);
+      }
+      throw error;
     } finally {
       this.busy = false;
       releaseRender();
