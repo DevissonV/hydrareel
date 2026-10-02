@@ -88,8 +88,18 @@ export class ProcessJobUseCase {
         const number = String(index + 1).padStart(2, '0');
         const subtitlesPath = path.join(dir, `clip-${number}.ass`);
         const outputPath = path.join(dir, `clip-${number}.mp4`);
-        const captionCueCount = await this.rendering.writeSubtitles(subtitlesPath, transcript, clip);
-        await this.rendering.render(sourcePath, outputPath, subtitlesPath, clip);
+        const captionStyle = 'pulse' as const;
+        const framing = sourceMeta.width / sourceMeta.height > 0.82 ? 'subject-safe' as const : 'fill' as const;
+        const captionCueCount = await this.rendering.writeSubtitles(subtitlesPath, transcript, clip, {
+          hook: clip.hook,
+          captionStyle,
+        });
+        await this.rendering.render(sourcePath, outputPath, subtitlesPath, clip, {
+          sourceWidth: sourceMeta.width,
+          sourceHeight: sourceMeta.height,
+          hook: clip.hook,
+          captionStyle,
+        });
         const outputMeta = await this.media.probe(outputPath);
         if (outputMeta.width !== 1080 || outputMeta.height !== 1920) throw new Error(`Clip ${number} no es 1080x1920`);
         if (outputMeta.videoCodec !== 'h264') throw new Error(`Clip ${number} no es H.264`);
@@ -100,6 +110,11 @@ export class ProcessJobUseCase {
           index: index + 1,
           key,
           title: clip.title,
+          hook: clip.hook,
+          socialCaption: clip.socialCaption,
+          hashtags: clip.hashtags,
+          captionStyle,
+          framing,
           durationSeconds: outputMeta.durationSeconds,
           score: clip.score,
           reason: clip.reason,
