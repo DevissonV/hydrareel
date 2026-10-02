@@ -11,6 +11,7 @@ describe('ffmpeg render command', () => {
     expect(joined).toContain('subtitles=');
     expect(joined).toContain('libx264');
     expect(joined).toContain('aac');
+    expect(args.indexOf('-i')).toBeLessThan(args.indexOf('-ss'));
     expect(args.at(-1)).toBe('/tmp/out.mp4');
   });
 
