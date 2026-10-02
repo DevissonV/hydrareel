@@ -11,7 +11,10 @@ describe('ffmpeg render command', () => {
     expect(joined).toContain('subtitles=');
     expect(joined).toContain('libx264');
     expect(joined).toContain('aac');
-    expect(args.indexOf('-i')).toBeLessThan(args.indexOf('-ss'));
+    const seeks = args.reduce<number[]>((acc, value, index) => value === '-ss' ? [...acc, index] : acc, []);
+    expect(seeks).toHaveLength(2);
+    expect(seeks[0]).toBeLessThan(args.indexOf('-i'));
+    expect(seeks[1]).toBeGreaterThan(args.indexOf('-i'));
     expect(args.at(-1)).toBe('/tmp/out.mp4');
   });
 
