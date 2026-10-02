@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { OBJECT_STORAGE, ObjectStoragePort } from '../../storage/application/object-storage.port';
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
 import { Transcript, TranscriptSegment, TranscriptWord } from '../../transcription/domain/transcript';
+import { RegenerateClipUseCase } from './regenerate-clip.use-case';
 
 interface StoredTranscript extends Omit<Transcript, 'model' | 'usage'> {
   jobId?: string;
@@ -122,6 +123,7 @@ export class TranscriptCorrectionUseCase {
   constructor(
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     @Inject(JOB_REPOSITORY) private readonly jobs: JobRepository,
+    private readonly regenerate: RegenerateClipUseCase,
   ) {}
 
   private async ownedJob(rawClientId: string | undefined, rawJobId: string) {
@@ -167,6 +169,15 @@ export class TranscriptCorrectionUseCase {
     }
 
     const correctedWords = retimeWords(transcript.words ?? [], text, transcript.duration);
+    const replacements: Array<{ from: string; to: string }> = [];
+    for (const corrected of correctedWords) {
+      const original = (transcript.words ?? []).find(
+        (word) => Math.abs(word.start - corrected.start) < 0.001 && Math.abs(word.end - corrected.end) < 0.001,
+      );
+      if (original && normalizeToken(original.word) !== normalizeToken(corrected.word)) {
+        replacements.push({ from: original.word, to: corrected.word });
+      }
+    }
     const correctedAt = new Date().toISOString();
     const updated: StoredTranscript = {
       ...transcript,
@@ -178,11 +189,20 @@ export class TranscriptCorrectionUseCase {
     };
     await this.storage.putJson(key, updated);
 
+    const clipsUpdating = job.clips.length;
+    setImmediate(() => {
+      void this.regenerate
+        .refreshFromCorrectedTranscript(job.clientId, job.id, replacements)
+        .catch(() => undefined);
+    });
+
     return {
       jobId: job.id,
       text,
       correctedAt,
       correctionCount: updated.correctionCount,
+      clipsUpdating,
+      updatingVideos: clipsUpdating > 0,
     };
   }
 }
