@@ -18,6 +18,7 @@ import { buildLayoutPreflight } from '../../rendering/domain/composition';
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
   private runningJobId?: string;
+  private queueDraining = false;
 
   constructor(
     @Inject(CONFIG) private readonly config: HydraConfig,
@@ -53,19 +54,46 @@ export class ProcessJobUseCase implements OnModuleInit {
         if (this.runningJobId === job.id) this.runningJobId = undefined;
       }
     }
+    this.kickQueue();
   }
 
   async markUploadedAndStart(jobId: string): Promise<void> {
     const job = await this.jobs.get(jobId);
     if (!job) throw new NotFoundException('Job no encontrado');
     if (job.status !== 'UPLOADING') throw new Error(`Job no está en UPLOADING: ${job.status}`);
-    if (this.runningJobId && this.runningJobId !== jobId) throw new Error('Ya existe un job procesándose');
     job.transition('UPLOADED');
     await this.jobs.save(job);
-    this.runningJobId = jobId;
-    setImmediate(() => void this.run(jobId).finally(() => {
-      if (this.runningJobId === jobId) this.runningJobId = undefined;
-    }));
+    jobLog(job.id, 'job_queued');
+    this.kickQueue();
+  }
+
+  private kickQueue(): void {
+    setImmediate(() => void this.drainQueue());
+  }
+
+  private async drainQueue(): Promise<void> {
+    if (this.queueDraining || this.runningJobId) return;
+    this.queueDraining = true;
+    try {
+      for (;;) {
+        if (this.runningJobId) return;
+        const queued = (await this.jobs.listActive())
+          .filter((job) => job.status === 'UPLOADED')
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        const next = queued[0];
+        if (!next) return;
+
+        this.runningJobId = next.id;
+        jobLog(next.id, 'queue_processing_started', { queuedAhead: 0 });
+        try {
+          await this.run(next.id);
+        } finally {
+          if (this.runningJobId === next.id) this.runningJobId = undefined;
+        }
+      }
+    } finally {
+      this.queueDraining = false;
+    }
   }
 
   private async run(jobId: string): Promise<void> {
