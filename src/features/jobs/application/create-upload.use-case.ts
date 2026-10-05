@@ -20,8 +20,8 @@ export class CreateUploadUseCase {
     if (this.creating) throw new ConflictException('Ya se está iniciando otro job');
     this.creating = true;
     try {
-      if (await this.jobs.countActive() >= this.config.maxConcurrentJobs) {
-        throw new ConflictException('HydraReel MVP permite un solo job simultáneo');
+      if (await this.jobs.countActive() >= this.config.maxQueuedJobs) {
+        throw new ConflictException(`La cola de HydraReel está llena. Máximo ${this.config.maxQueuedJobs} videos pendientes o en proceso.`);
       }
       const { extension } = validateUploadInput(fileName, contentType);
       const id = randomUUID();

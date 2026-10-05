@@ -57,6 +57,7 @@ const html = String.raw`<!doctype html>
     .ring{--p:10;width:122px;height:122px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(from 180deg,var(--cyan) 0 calc(var(--p)*1%),var(--violet) calc(var(--p)*1%) calc(var(--p)*1% + 8%),#222c4c 0);position:relative;box-shadow:0 0 35px #6c50ff3d}
     .ring:after{content:"";position:absolute;inset:10px;border-radius:50%;background:#0a1020}.ring strong{z-index:1;font-size:26px}
     .filename{font-weight:850;margin-top:13px;max-width:100%;width:100%;padding:0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}.upload-meta{font-size:12px;color:#8792ad;margin-top:5px;max-width:100%;line-height:1.45;text-align:center}.ios-note{margin-top:12px;padding:11px 13px;border-radius:14px;border:1px solid #5f6fa72e;background:#0c1428;color:#8f9ab5;font-size:12px;line-height:1.45;text-align:left}.ios-note b{color:#cdd5ea}
+    .batch-queue{margin-top:16px;display:grid;gap:7px}.batch-item{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:9px;align-items:center;padding:10px 11px;border:1px solid #56648738;background:#0a1223;border-radius:12px}.batch-index{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#18223d;color:#cbd5ee;font-size:10px;font-weight:900}.batch-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:800;color:#d9e0f1}.batch-state{font-size:10px;color:#8794af;font-weight:850}.batch-item.active{border-color:#6b65ff66;background:#101733}.batch-item.done .batch-index{background:#183426;color:#8ff0bd}.batch-item.fail{border-color:#ff668844}.batch-item.fail .batch-index{background:#35131e;color:#ff9fb3}.batch-note{margin-top:8px;color:#7f8ca8;font-size:10px;line-height:1.4}
     .steps{margin-top:25px;display:grid;gap:6px}.step{display:grid;grid-template-columns:34px 1fr auto;gap:11px;align-items:center;padding:11px 8px;color:#69758f}.step .dot{width:28px;height:28px;border-radius:50%;border:2px solid #344364;display:grid;place-items:center}.step b{display:block;color:#74809a}.step small{color:#65708a}.step.active{color:#cfc7ff}.step.active .dot{border-color:#a75cff;box-shadow:0 0 18px #a15aff66}.step.active b{color:#fff}.step.done .dot{background:linear-gradient(145deg,#9a55ff,#556cff);border:0;color:#fff}.step.done b{color:#e8ebf6}
     .results{max-width:980px;margin:22px auto}.result-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:14px}.result-head h2{font-size:36px;letter-spacing:-.045em;margin:0}.result-head p{margin:7px 0 0;color:var(--muted)}.result-summary{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px}.summary-pill{border:1px solid #5c6da23d;background:#0d1528;border-radius:999px;padding:8px 10px;color:#cbd4ea;font-size:11px;font-weight:850}.summary-pill strong{color:#fff}
     .clips{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:22px}.result-card{border-radius:25px;padding:13px;overflow:hidden}.preview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px}.preview-tabs{display:inline-flex;gap:3px;padding:3px;border:1px solid #5261843d;background:#090f1d;border-radius:11px}.preview-tab,.preview-safe{border:0;background:transparent;color:#8f9ab4;border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;cursor:pointer}.preview-tab.active{background:#1a2440;color:#f4f6ff;box-shadow:inset 0 0 0 1px #7280b73b}.preview-safe{border:1px solid #5361813d;background:#0c1426;color:#b8c3da}.preview-safe.active{border-color:#a45fff66;color:#e1c9ff;background:#21153a}.video-shell{position:relative;border-radius:19px;overflow:hidden;background:#000;box-shadow:0 15px 45px #0008}.video-shell video{display:block;width:100%;aspect-ratio:9/16;background:#000}.badge{position:absolute;top:12px;padding:7px 9px;border-radius:10px;background:#090c14bb;border:1px solid #ffffff22;backdrop-filter:blur(8px);font-size:11px;font-weight:850;z-index:4}.badge.left{left:12px}.badge.right{right:12px}.video-shell.platform-preview .badge{display:none}.platform-overlay{position:absolute;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .16s ease;color:#fff;text-shadow:0 1px 3px #000}.video-shell.platform-preview .platform-overlay{opacity:1}.tk-search{position:absolute;top:2.1%;left:17%;right:17%;height:5.4%;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:999px;background:#0b0b0fd9;border:1px solid #ffffff20;font-size:10px;font-weight:800;backdrop-filter:blur(8px)}.tk-search:before{content:'⌕';font-size:14px}.tk-right{position:absolute;right:2.8%;bottom:18%;display:flex;flex-direction:column;align-items:center;gap:13px}.tk-action{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px;font-weight:850}.tk-icon{width:31px;height:31px;border-radius:50%;display:grid;place-items:center;font-size:18px;color:#fff;background:#0a0a0a35;text-shadow:0 1px 4px #000}.tk-avatar{width:34px;height:34px;border-radius:50%;border:2px solid #fff;background:linear-gradient(145deg,#9b61ff,#2d7dff);box-shadow:0 2px 8px #0008}.tk-bottom{position:absolute;left:4%;right:19%;bottom:3.6%;font-size:10px;line-height:1.28}.tk-user{font-weight:950;margin-bottom:5px}.tk-caption{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:650}.tk-audio{margin-top:6px;font-size:9px;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.safe-layer{position:absolute;inset:0;z-index:5;pointer-events:none;display:none}.video-shell.show-safe .safe-layer{display:block}.safe-mask{position:absolute;background:#ff4d6d28;border-color:#ff789155;border-style:solid}.safe-mask.top{left:0;right:0;top:0;height:12.5%;border-width:0 0 1px}.safe-mask.right{right:0;top:12.5%;bottom:22.4%;width:20.4%;border-width:0 0 0 1px}.safe-mask.bottom{left:0;right:0;bottom:0;height:22.4%;border-width:1px 0 0}.safe-mask.left{left:0;top:12.5%;bottom:22.4%;width:6.7%;border-width:0 1px 0 0}.safe-label{position:absolute;top:14%;left:9%;padding:5px 7px;border-radius:8px;background:#07101ddb;border:1px solid #63dda866;color:#9af2c2;font-size:9px;font-weight:900}.preflight-bar{display:flex;align-items:center;gap:8px;margin:9px 2px 0;padding:9px 10px;border-radius:12px;border:1px solid #53618136;background:#0b1324;color:#99a6bf;font-size:10px;font-weight:800}.preflight-dot{width:7px;height:7px;border-radius:50%;background:#7c879f;flex:none}.preflight-bar.pass{border-color:#4de59b35;color:#a7eac7}.preflight-bar.pass .preflight-dot{background:#4de59b}.preflight-bar.warn{border-color:#ffb35c4c;color:#ffd09a;background:#21170d}.preflight-bar.warn .preflight-dot{background:#ffb35c}
@@ -77,7 +78,7 @@ const html = String.raw`<!doctype html>
     <section id="home" class="hero">
       <div class="hero-copy">
         <span class="eyebrow">✦ MAGIC EDIT · DE VIDEO A CONTENIDO</span>
-        <h1>Sube un video. Hydra te devuelve contenido <span class="grad">listo para publicar.</span></h1>
+        <h1>Sube tus videos. Hydra te devuelve contenido <span class="grad">listo para publicar.</span></h1>
         <p class="lead">Encuentra los mejores momentos, elimina pausas muertas, mejora voz y color, enfatiza ideas clave y prepara el copy. Sin abrir un editor.</p>
         <div class="chips"><span class="chip">✦ Magic Edit</span><span class="chip">🎙 Audio pulido</span><span class="chip">↗ Copy listo</span></div>
       </div>
@@ -85,11 +86,11 @@ const html = String.raw`<!doctype html>
         <div class="upload-card">
           <div class="visual"><div class="play-glass"></div></div>
           <label id="pick" class="primary file-trigger">
-            <span>⇧ &nbsp; Seleccionar video &nbsp; →</span>
-            <input id="file" class="native-file" type="file" accept="video/*,.mp4,.mov,.webm">
+            <span>⇧ &nbsp; Seleccionar hasta 3 videos &nbsp; →</span>
+            <input id="file" class="native-file" type="file" multiple accept="video/*,.mp4,.mov,.webm">
           </label>
           <div class="magic-strip"><b>Hydra edita por ti:</b> selección · ritmo · captions semánticos · framing · audio · color · copy</div>
-          <div class="helper">MP4, MOV o WEBM · máximo 30 min · sin cuotas artificiales de clips</div>
+          <div class="helper">Hasta 3 videos · 1 GB por lote · MP4, MOV o WEBM · máximo 30 min por video</div>
         </div>
         <div class="trust"><span class="shield">✓</span><span><b style="color:#d8dff0">Tu archivo va directo a almacenamiento privado.</b><br>HydraReel procesa únicamente el contenido que tú subes.</span></div>
       </div>
@@ -104,6 +105,7 @@ const html = String.raw`<!doctype html>
           <div class="filename" id="filename">VIDEO.MP4</div>
           <div class="upload-meta" id="uploadMeta">Preparando archivo…</div>
         </div>
+        <div id="batchQueue" class="batch-queue" hidden></div>
         <div class="steps">
           <div class="step" data-state="UPLOADING"><span class="dot">1</span><span><b>Preparando video</b><small>Subiendo el original de forma segura</small></span><span></span></div>
           <div class="step" data-state="TRANSCRIBING"><span class="dot">2</span><span><b>Entendiendo contenido</b><small>Detectando ideas, contexto y momentos importantes</small></span><span></span></div>
@@ -111,7 +113,7 @@ const html = String.raw`<!doctype html>
           <div class="step" data-state="RENDERING"><span class="dot">4</span><span><b>Magic Edit</b><small>Ritmo, framing, audio, color y captions semánticos</small></span><span></span></div>
         </div>
       </div>
-      <div class="server-note"><b>Ya puedes salir de esta pantalla.</b> Cuando termine la subida, Hydra seguirá procesando en el servidor aunque abras Mis clips, cambies de app o cierres esta pestaña.</div>
+      <div class="server-note"><b>Hydra trabaja en cola, no en paralelo.</b> Cuando terminen las subidas, puedes salir: los videos cargados seguirán procesándose uno por uno aunque cierres esta pestaña.</div>
     </section>
 
     <section id="results" hidden class="results">
@@ -147,7 +149,7 @@ const html = String.raw`<!doctype html>
   </main>
 
 <script>
-const input=document.getElementById('file'),pick=document.getElementById('pick'),home=document.getElementById('home'),processing=document.getElementById('processing'),results=document.getElementById('results'),library=document.getElementById('library'),libraryGrid=document.getElementById('libraryGrid'),clips=document.getElementById('clips'),err=document.getElementById('error'),ring=document.getElementById('ring'),percent=document.getElementById('percent'),filenameEl=document.getElementById('filename'),uploadMeta=document.getElementById('uploadMeta'),resultCopy=document.getElementById('resultCopy'),resultSummary=document.getElementById('resultSummary'),again=document.getElementById('again'),transcriptModal=document.getElementById('transcriptModal'),transcriptVideo=document.getElementById('transcriptVideo'),transcriptClipLabel=document.getElementById('transcriptClipLabel'),transcriptArea=document.getElementById('transcriptArea'),transcriptStatus=document.getElementById('transcriptStatus'),transcriptSave=document.getElementById('transcriptSave'),transcriptCancel=document.getElementById('transcriptCancel'),transcriptClose=document.getElementById('transcriptClose'),navCreate=document.getElementById('navCreate'),navLibrary=document.getElementById('navLibrary');
+const input=document.getElementById('file'),pick=document.getElementById('pick'),home=document.getElementById('home'),processing=document.getElementById('processing'),results=document.getElementById('results'),library=document.getElementById('library'),libraryGrid=document.getElementById('libraryGrid'),clips=document.getElementById('clips'),err=document.getElementById('error'),ring=document.getElementById('ring'),percent=document.getElementById('percent'),filenameEl=document.getElementById('filename'),uploadMeta=document.getElementById('uploadMeta'),resultCopy=document.getElementById('resultCopy'),resultSummary=document.getElementById('resultSummary'),again=document.getElementById('again'),transcriptModal=document.getElementById('transcriptModal'),transcriptVideo=document.getElementById('transcriptVideo'),transcriptClipLabel=document.getElementById('transcriptClipLabel'),transcriptArea=document.getElementById('transcriptArea'),transcriptStatus=document.getElementById('transcriptStatus'),transcriptSave=document.getElementById('transcriptSave'),transcriptCancel=document.getElementById('transcriptCancel'),transcriptClose=document.getElementById('transcriptClose'),navCreate=document.getElementById('navCreate'),navLibrary=document.getElementById('navLibrary'),batchQueue=document.getElementById('batchQueue');
 let pickerOpenedAt=0;
 let pickerDeliveredFile=false;
 let wakeLock=null;
@@ -171,6 +173,9 @@ function markClipUpdated(jobId,index){
   setTimeout(()=>setClipUiState(jobId,index,null,''),3500);
 }
 const JOB_KEY='hydrareel-active-job';
+const BATCH_KEY='hydrareel-active-batch';
+const MAX_BATCH_FILES=3;
+const MAX_BATCH_BYTES=1024*1024*1024;
 const CLIENT_KEY='hydrareel-client-id';
 function clientId(){let id=localStorage.getItem(CLIENT_KEY);if(!id){id=crypto.randomUUID();localStorage.setItem(CLIENT_KEY,id)}return id}
 
@@ -186,7 +191,7 @@ function show(section){currentSection=section;home.hidden=section!=='home';proce
 function setProgress(state,value){const p=value??pct[state]??5;ring.style.setProperty('--p',p);percent.textContent=Math.round(p)+'%';const effective=state==='UPLOADED'?'TRANSCRIBING':state;const idx=order.indexOf(effective);document.querySelectorAll('.step').forEach((el,i)=>{el.classList.toggle('active',i===idx);el.classList.toggle('done',i<idx);const dot=el.querySelector('.dot');if(i<idx)dot.textContent='✓'})}
 function setPickerBusy(busy){pick.classList.toggle('busy',busy);input.disabled=busy}
 function friendlyError(message){const raw=String(message||'');if(/ffmpeg|exited null|SIGKILL|Internal server error|statusCode|^\s*\{/i.test(raw))return 'No pudimos terminar esta edición. Tu video original quedó guardado para volver a intentarlo.';return raw||'No pudimos completar el procesamiento.'}
-function fail(message){err.hidden=false;err.textContent=friendlyError(message);localStorage.removeItem(JOB_KEY);void releaseScreen();setPickerBusy(false);show('home')}
+function fail(message){err.hidden=false;err.textContent=friendlyError(message);localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);void releaseScreen();setPickerBusy(false);show('home')}
 function uploadWithProgress(url,headers,file){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();const started=performance.now();xhr.open('PUT',url);Object.entries(headers||{}).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.max(3,Math.round(e.loaded/e.total*18));setProgress('UPLOADING',p);const elapsed=Math.max(.25,(performance.now()-started)/1000);const bytesPerSecond=e.loaded/elapsed;const speed=bytesPerSecond/1048576;const eta=bytesPerSecond>0?(e.total-e.loaded)/bytesPerSecond:NaN;uploadMeta.textContent=(e.loaded/1048576).toFixed(1)+' MB de '+(e.total/1048576).toFixed(1)+' MB · '+speed.toFixed(1)+' MB/s'+(Number.isFinite(eta)?' · ~'+formatEta(eta):'')}};xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('Upload S3 falló: '+xhr.status));xhr.onerror=()=>reject(new Error('La subida se interrumpió. Verifica tu conexión e intenta de nuevo.'));xhr.send(file)})}
 function packText(c){const tags=(c.hashtags||[]).join(' ');return [c.socialCaption||'',tags].filter(Boolean).join('\n\n')}
 async function copyPack(c,button){try{await navigator.clipboard.writeText(packText(c));const old=button.textContent;button.textContent='✓ Copiado';setTimeout(()=>button.textContent=old,1200)}catch{alert('No pudimos copiar el texto.')}}
@@ -388,11 +393,99 @@ function addClip(c,total,jobId,fallbackGeneratedAt){
   details.append(clipStatus,titleRow,meta,magic,pack,download,correct);if(!activeResult?.status||activeResult.status==='COMPLETED')details.append(refine);details.append(editorial);card.append(toolbar,shell,preflight,details);clips.appendChild(card)
 }
 function render(job){activeResult={...job,clips:[...(job.clips||[])]};clips.innerHTML='';resultSummary.innerHTML='';const list=activeResult.clips;const ready=totalClipSeconds(list);resultCopy.textContent=(activeResult.sourceDuration?mediaTime(activeResult.sourceDuration)+' original → ':'')+list.length+' '+(list.length===1?'clip':'clips')+' → '+mediaTime(ready)+' listos';const summaryItems=[];if(activeResult.sourceDuration)summaryItems.push(['Original',mediaTime(activeResult.sourceDuration)]);summaryItems.push(['Clips',String(list.length)]);if(ready>0)summaryItems.push(['Contenido listo',mediaTime(ready)]);if(activeResult.timings?.totalDurationMs)summaryItems.push(['Procesado en',mediaTime(activeResult.timings.totalDurationMs/1000)]);for(const [label,value] of summaryItems){const pill=document.createElement('span');pill.className='summary-pill';pill.innerHTML=label+' <strong>'+value+'</strong>';resultSummary.appendChild(pill)}const generatedFallback=activeResult.completedAt||activeResult.updatedAt||activeResult.createdAt;list.forEach(c=>addClip(c,list.length,activeResult.id,generatedFallback));show('results')}
-async function poll(id){for(;;){await new Promise(r=>setTimeout(r,2200));let r;try{r=await fetch('/api/jobs/'+id)}catch{continue}if(!r.ok){if(r.status===404){localStorage.removeItem(JOB_KEY);if(currentSection!=='library')fail('El procesamiento anterior ya no está disponible.');return}continue}const j=await r.json();setProgress(j.status);uploadMeta.textContent=j.status==='TRANSCRIBING'?'Entendiendo todo lo que se dice… · puedes salir de esta pantalla':j.status==='ANALYZING'?'Eligiendo momentos que funcionan por sí solos… · puedes salir de esta pantalla':j.status==='RENDERING'?'Aplicando Magic Edit… · puedes salir de esta pantalla':j.status;if(j.status==='FAILED'){localStorage.removeItem(JOB_KEY);await releaseScreen();setPickerBusy(false);if(currentSection==='library'){await loadLibrary();return}fail(j.error||'No pudimos completar esta edición.');return}if(j.status==='COMPLETED'){localStorage.removeItem(JOB_KEY);await releaseScreen();setPickerBusy(false);activeResult=j;if(currentSection==='library'){await loadLibrary();return}render(j);return}}}
-async function handleSelectedFile(f){if(!f)return;pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);filenameEl.textContent=f.name;show('processing');setProgress('UPLOADING',3);void keepScreenAwake();const sizeMb=f.size/1048576;uploadMeta.textContent='Video recibido · '+sizeMb.toFixed(1)+' MB · preparando subida…';await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));try{const r=await fetch('/api/jobs/upload-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName:f.name,contentType:f.type||'application/octet-stream',clientId:clientId()})});if(!r.ok)throw new Error(await r.text());const u=await r.json();await uploadWithProgress(u.uploadUrl,u.headers,f);setProgress('UPLOADED',22);uploadMeta.textContent='Upload completo · iniciando procesamiento…';localStorage.setItem(JOB_KEY,u.jobId);const p=await fetch('/api/jobs/'+u.jobId+'/uploaded',{method:'POST'});if(!p.ok)throw new Error(await p.text());uploadMeta.textContent='Procesamiento iniciado en servidor · ya puedes salir de esta pantalla';await poll(u.jobId)}catch(e){fail(e.message||String(e))}}
-again.onclick=()=>{input.value='';pickerDeliveredFile=false;err.hidden=true;localStorage.removeItem(JOB_KEY);void releaseScreen();setPickerBusy(false);show('home')};
+function queueStateLabel(status){
+  if(status==='UPLOADING')return 'Subiendo';
+  if(status==='UPLOADED')return 'En cola';
+  if(status==='TRANSCRIBING')return 'Entendiendo';
+  if(status==='ANALYZING')return 'Analizando';
+  if(status==='RENDERING')return 'Editando';
+  if(status==='COMPLETED')return '✓ Listo';
+  if(status==='FAILED')return 'Error';
+  return 'Pendiente';
+}
+function renderBatchQueue(items){
+  batchQueue.innerHTML='';
+  batchQueue.hidden=items.length<2;
+  if(items.length<2)return;
+  items.forEach((item,index)=>{
+    const row=document.createElement('div');
+    const active=['TRANSCRIBING','ANALYZING','RENDERING'].includes(item.status);
+    row.className='batch-item '+(item.status==='COMPLETED'?'done':item.status==='FAILED'?'fail':active?'active':'');
+    const num=document.createElement('span');num.className='batch-index';num.textContent=item.status==='COMPLETED'?'✓':String(index+1);
+    const name=document.createElement('span');name.className='batch-name';name.textContent=item.name||item.originalFileName||('Video '+(index+1));
+    const state=document.createElement('span');state.className='batch-state';state.textContent=queueStateLabel(item.status);
+    row.append(num,name,state);batchQueue.appendChild(row);
+  });
+  const note=document.createElement('div');note.className='batch-note';note.textContent='Hydra procesa un solo video a la vez. Los demás esperan sin consumir procesamiento en paralelo.';batchQueue.appendChild(note);
+}
+async function fetchJob(id){
+  try{const r=await fetch('/api/jobs/'+id);if(!r.ok)return null;return await r.json()}catch{return null}
+}
+async function pollBatch(ids,initialItems=[]){
+  const names=new Map(initialItems.map(item=>[item.id,item.name]));
+  for(;;){
+    const jobs=(await Promise.all(ids.map(fetchJob))).filter(Boolean);
+    if(!jobs.length){await new Promise(r=>setTimeout(r,2200));continue}
+    const items=ids.map((id,index)=>{
+      const job=jobs.find(j=>j.id===id);
+      return job?{...job,name:names.get(id)||job.originalFileName}:{id,name:names.get(id)||('Video '+(index+1)),status:'UPLOADED'};
+    });
+    renderBatchQueue(items);
+    const current=items.find(item=>!['COMPLETED','FAILED','UPLOADED'].includes(item.status))||items.find(item=>item.status==='UPLOADED');
+    if(current){
+      filenameEl.textContent=current.name||current.originalFileName||'Video en proceso';
+      setProgress(current.status);
+      uploadMeta.textContent=current.status==='UPLOADED'?'En cola · Hydra lo procesará automáticamente':current.status==='TRANSCRIBING'?'Entendiendo todo lo que se dice…':current.status==='ANALYZING'?'Eligiendo momentos que funcionan por sí solos…':current.status==='RENDERING'?'Aplicando Magic Edit…':'Procesando…';
+    }
+    const terminal=items.every(item=>item.status==='COMPLETED'||item.status==='FAILED');
+    if(terminal){
+      localStorage.removeItem(BATCH_KEY);localStorage.removeItem(JOB_KEY);
+      await releaseScreen();setPickerBusy(false);
+      const completed=items.filter(item=>item.status==='COMPLETED');
+      if(items.length===1&&completed.length===1&&currentSection!=='library'){render(completed[0]);return}
+      await loadLibrary();return;
+    }
+    await new Promise(r=>setTimeout(r,2200));
+  }
+}
+async function handleSelectedFiles(fileList){
+  const files=Array.from(fileList||[]);
+  if(!files.length)return;
+  if(files.length>MAX_BATCH_FILES){alert('Puedes seleccionar máximo 3 videos por lote.');input.value='';return}
+  const totalBytes=files.reduce((sum,file)=>sum+file.size,0);
+  if(totalBytes>MAX_BATCH_BYTES){alert('El lote supera 1 GB. Reduce el tamaño o selecciona menos videos.');input.value='';return}
+  pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);show('processing');void keepScreenAwake();
+  const batchItems=files.map((file,index)=>({name:file.name,status:index===0?'UPLOADING':'PENDING'}));
+  renderBatchQueue(batchItems);
+  const ids=[];
+  const serverItems=[];
+  try{
+    for(let index=0;index<files.length;index++){
+      const f=files[index];
+      filenameEl.textContent=f.name;
+      setProgress('UPLOADING',3);
+      batchItems[index].status='UPLOADING';renderBatchQueue(batchItems);
+      const sizeMb=f.size/1048576;
+      uploadMeta.textContent='Subiendo '+(index+1)+' de '+files.length+' · '+sizeMb.toFixed(1)+' MB';
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const r=await fetch('/api/jobs/upload-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName:f.name,contentType:f.type||'application/octet-stream',clientId:clientId()})});
+      if(!r.ok)throw new Error(await r.text());
+      const u=await r.json();
+      ids.push(u.jobId);
+      serverItems.push({id:u.jobId,name:f.name,status:'UPLOADING'});
+      localStorage.setItem(BATCH_KEY,JSON.stringify(ids));
+      await uploadWithProgress(u.uploadUrl,u.headers,f);
+      const p=await fetch('/api/jobs/'+u.jobId+'/uploaded',{method:'POST'});
+      if(!p.ok)throw new Error(await p.text());
+      batchItems[index].status='UPLOADED';renderBatchQueue(batchItems);
+    }
+    uploadMeta.textContent=files.length>1?'Todos los videos están cargados · Hydra los procesará uno por uno':'Upload completo · iniciando procesamiento…';
+    await pollBatch(ids,serverItems);
+  }catch(e){fail(e.message||String(e))}
+}
+again.onclick=()=>{input.value='';pickerDeliveredFile=false;err.hidden=true;localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);batchQueue.hidden=true;batchQueue.innerHTML='';void releaseScreen();setPickerBusy(false);show('home')};
 input.addEventListener('click',()=>{pickerOpenedAt=Date.now();pickerDeliveredFile=false;err.hidden=true});
-input.addEventListener('change',()=>handleSelectedFile(input.files&&input.files[0]));
+input.addEventListener('change',()=>void handleSelectedFiles(input.files));
 
 function formatDate(value){try{return new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))}catch{return value}}
 function projectTitle(p){const raw=(p.originalFileName||'').replace(/\.[^.]+$/,'').trim();const ugly=/^[0-9a-f-]{24,}$/i.test(raw)||/^v?\d{10,}/i.test(raw);return ugly?(p.clips?.[0]?.title||'Proyecto HydraReel'):raw}
@@ -400,11 +493,32 @@ function openLibraryProject(p){if(p.status!=='COMPLETED'&&!(p.clips||[]).length)
 function statusLabel(status){if(status==='COMPLETED')return '✓ Listo';if(status==='FAILED')return 'Error';if(status==='UPLOADING')return 'Subiendo';return '● Procesando'}
 function statusProgress(status){return pct[status]??(status==='UPLOADED'?23:10)}
 async function loadLibrary(){show('library');libraryGrid.innerHTML='<div class="empty">Cargando tus proyectos…</div>';try{const r=await fetch('/api/library',{headers:{'x-hydra-client-id':clientId()}});if(!r.ok)throw new Error('No pudimos cargar tu biblioteca');const projects=await r.json();libraryGrid.innerHTML='';if(!projects.length){libraryGrid.innerHTML='<div class="empty"><b>Aún no tienes proyectos.</b><br>Los trabajos en proceso y los clips terminados aparecerán aquí.</div>';return}for(const p of projects){const card=document.createElement('article');card.className='project-card';const preview=document.createElement('div');preview.className='project-preview';const first=p.clips&&p.clips[0];if(first){const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='metadata';v.src=first.url;preview.appendChild(v)}const state=document.createElement('span');state.className='library-status '+(p.status==='COMPLETED'?'done':p.status==='FAILED'?'fail':'live');state.textContent=statusLabel(p.status);preview.appendChild(state);const count=document.createElement('span');count.className='library-count';const clipCount=p.clips?.length||0;count.textContent=p.status==='COMPLETED'?(clipCount+' '+(clipCount===1?'clip':'clips')):(clipCount+' '+(clipCount===1?'listo':'listos')+' · '+statusProgress(p.status)+'%');preview.appendChild(count);const body=document.createElement('div');body.className='project-body';const name=document.createElement('div');name.className='project-name';name.textContent=projectTitle(p);const meta=document.createElement('div');meta.className='project-meta';const readySeconds=totalClipSeconds(p.clips||[]);const parts=[];const generatedProjectAt=p.completedAt||p.updatedAt||p.createdAt;if(generatedProjectAt)parts.push('Generado '+formatDate(generatedProjectAt));if(p.sourceDuration)parts.push(mediaTime(p.sourceDuration)+' original');if(p.status==='COMPLETED')parts.push((p.clips?.length||0)+' '+((p.clips?.length||0)===1?'clip':'clips'));if(readySeconds>0)parts.push(mediaTime(readySeconds)+' listos');meta.textContent=parts.join(' · ');const actions=document.createElement('div');actions.className='project-actions';const view=document.createElement('button');view.className='view-project';view.textContent=p.status==='COMPLETED'?'Ver clips':(p.clips?.length?'Ver '+p.clips.length+' listos':'Ver progreso');view.onclick=()=>openLibraryProject(p);actions.append(view);if(p.status==='COMPLETED'){const del=document.createElement('button');del.className='danger';del.title='Borrar proyecto';del.setAttribute('aria-label','Borrar proyecto');del.onclick=async()=>{if(!confirm('¿Eliminar este proyecto y todos sus clips? Esta acción no se puede deshacer.'))return;del.disabled=true;const dr=await fetch('/api/library/'+p.id,{method:'DELETE',headers:{'x-hydra-client-id':clientId()}});if(!dr.ok){del.disabled=false;alert('No pudimos borrar el proyecto.');return}card.remove();if(!libraryGrid.children.length)libraryGrid.innerHTML='<div class="empty">No tienes proyectos guardados.</div>'};actions.append(del)}body.append(name,meta,actions);card.append(preview,body);libraryGrid.append(card)}}catch(e){libraryGrid.innerHTML='<div class="empty">'+friendlyError(e.message||e)+'</div>'}}
-async function resumeActiveJob(showProgress){const id=localStorage.getItem(JOB_KEY);if(!id){if(showProgress)show('home');return false}try{const r=await fetch('/api/jobs/'+id);if(!r.ok){localStorage.removeItem(JOB_KEY);if(showProgress)show('home');return false}const j=await r.json();if(j.status==='COMPLETED'){localStorage.removeItem(JOB_KEY);activeResult=j;if(showProgress)render(j);return true}if(j.status==='FAILED'){localStorage.removeItem(JOB_KEY);if(showProgress){err.hidden=false;err.textContent=friendlyError(j.error);show('home')}return true}filenameEl.textContent=j.originalFileName||'Video en proceso';setPickerBusy(true);setProgress(j.status);uploadMeta.textContent='Hydra sigue procesando en el servidor · puedes salir de esta pantalla';if(showProgress)show('processing');void keepScreenAwake();return true}catch{return false}}
+async function resumeActiveJob(showProgress){
+  let ids=[];
+  try{ids=JSON.parse(localStorage.getItem(BATCH_KEY)||'[]')}catch{ids=[]}
+  if(!Array.isArray(ids)||!ids.length){
+    const legacy=localStorage.getItem(JOB_KEY);
+    if(legacy)ids=[legacy];
+  }
+  if(!ids.length){if(showProgress)show('home');return false}
+  const jobs=(await Promise.all(ids.map(fetchJob))).filter(Boolean);
+  if(!jobs.length){localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);if(showProgress)show('home');return false}
+  const terminal=jobs.every(j=>j.status==='COMPLETED'||j.status==='FAILED');
+  if(terminal){
+    localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);
+    const completed=jobs.filter(j=>j.status==='COMPLETED');
+    if(showProgress&&jobs.length===1&&completed.length===1)render(completed[0]);else if(showProgress)await loadLibrary();
+    return true;
+  }
+  setPickerBusy(true);if(showProgress)show('processing');void keepScreenAwake();
+  renderBatchQueue(jobs.map(j=>({id:j.id,name:j.originalFileName,status:j.status})));
+  void pollBatch(ids,jobs.map(j=>({id:j.id,name:j.originalFileName,status:j.status})));
+  return true;
+}
 navCreate.onclick=()=>void resumeActiveJob(true);
 navLibrary.onclick=()=>void loadLibrary();
 
-(async()=>{const resumed=await resumeActiveJob(true);if(resumed&&localStorage.getItem(JOB_KEY))void poll(localStorage.getItem(JOB_KEY));})();
+(async()=>{await resumeActiveJob(true)})();
 </script>
 </body>
 </html>`;
