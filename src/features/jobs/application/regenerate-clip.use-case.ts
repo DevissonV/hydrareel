@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import { RenderGate } from './render-gate';
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
 import { normalizeProjectMetrics, ProjectMetrics } from '../domain/project-metrics';
 import { buildLayoutPreflight } from '../../rendering/domain/composition';
+import { HeavyWorkQueue } from './heavy-work-queue';
 
 type RegenerateMode = 'shorter' | 'longer' | 'alternative' | 'restyle';
 
@@ -57,7 +58,6 @@ export function replaceWholeText(value: string, from: string, to: string): strin
 
 @Injectable()
 export class RegenerateClipUseCase {
-  private busy = false;
 
   constructor(
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
@@ -66,6 +66,7 @@ export class RegenerateClipUseCase {
     @Inject(RENDERING_PORT) private readonly rendering: RenderingPort,
     @Inject(JOB_REPOSITORY) private readonly jobs: JobRepository,
     private readonly renderGate: RenderGate,
+    private readonly heavyWork: HeavyWorkQueue,
   ) {}
 
   async execute(
@@ -79,15 +80,25 @@ export class RegenerateClipUseCase {
     const clipIndex = Number.parseInt(rawClipIndex, 10);
     if (!Number.isInteger(clipIndex) || clipIndex < 1) throw new BadRequestException('clipIndex inválido');
     const mode = assertMode(body.mode);
+
+    return this.heavyWork.enqueue(
+      `manual:${jobId}:${clipIndex}`,
+      () => this.executeNow(clientId, jobId, clipIndex, mode, body),
+      { priority: 0, coalesce: true },
+    );
+  }
+
+  private async executeNow(
+    clientId: string,
+    jobId: string,
+    clipIndex: number,
+    mode: RegenerateMode,
+    body: { mode?: unknown; captionStyle?: unknown },
+  ) {
     const started = Date.now();
     let manifestForMetrics: LibraryManifest | undefined;
     let requestRecorded = false;
-    if (this.busy) throw new ConflictException('Hydra ya está ajustando otro clip.');
-    const releaseRender = this.renderGate.tryAcquire(`regenerate:${jobId}:${clipIndex}`);
-    if (!releaseRender) {
-      throw new ConflictException('Hydra está terminando otra edición. Este ajuste estará disponible apenas termine.');
-    }
-    this.busy = true;
+    const releaseRender = await this.renderGate.acquire(`regenerate:${jobId}:${clipIndex}`);
 
     const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
     const dir = path.join(os.tmpdir(), 'hydrareel-regenerate', jobId, String(clipIndex));
@@ -235,12 +246,26 @@ export class RegenerateClipUseCase {
       }
       throw error;
     } finally {
-      this.busy = false;
       releaseRender();
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
+
   async refreshFromCorrectedTranscript(
+    clientId: string,
+    jobId: string,
+    replacements: Array<{ from: string; to: string }> = [],
+    clipIndices?: number[],
+  ): Promise<number> {
+    const scope = clipIndices?.length === 1 ? String(clipIndices[0]) : 'all';
+    return this.heavyWork.enqueue(
+      `transcript:${jobId}:${scope}`,
+      () => this.refreshFromCorrectedTranscriptNow(clientId, jobId, replacements, clipIndices),
+      { priority: 0, coalesce: true },
+    );
+  }
+
+  private async refreshFromCorrectedTranscriptNow(
     clientId: string,
     jobId: string,
     replacements: Array<{ from: string; to: string }> = [],

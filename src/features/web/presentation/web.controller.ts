@@ -315,10 +315,10 @@ async function saveClipTranscript(){
     const data=await r.json();
     transcriptDirty=false;
     transcriptInitial=text;
-    transcriptStatus.textContent=data.updatingVideo?'✓ Guardado. Actualizando el video en el servidor…':'✓ Guardado.';
+    transcriptStatus.textContent=data.updatingVideo?'✓ Guardado · la actualización quedó en cola.':'✓ Guardado.';
     transcriptSave.textContent='✓ Guardado';
-    resultCopy.textContent=data.updatingVideo?'Hydra está actualizando el clip '+clip.index+' con tus correcciones…':resultCopy.textContent;
-    if(data.updatingVideo)markClipUpdating(jobId,clip.index,'⟳ Actualizando video…');
+    resultCopy.textContent=data.updatingVideo?'Corrección guardada · Hydra actualizará el clip '+clip.index+' en su turno.':resultCopy.textContent;
+    if(data.updatingVideo)markClipUpdating(jobId,clip.index,'⟳ Corrección guardada · en cola');
     setTimeout(()=>closeTranscriptEditor(true),700);
     if(data.updatingVideo)void waitForClipChanges(jobId,{[String(clip.index)]:oldKey},1);
   }catch(e){
@@ -333,7 +333,7 @@ transcriptCancel.onclick=()=>closeTranscriptEditor();
 transcriptClose.onclick=()=>closeTranscriptEditor();
 transcriptSave.onclick=()=>void saveClipTranscript();
 transcriptModal.addEventListener('click',e=>{if(e.target===transcriptModal)closeTranscriptEditor()});
-async function regenerateClip(jobId,c,mode,button){if(!jobId){alert('Este clip aún no está disponible para ajustar.');return}const old=button.textContent;const oldKey=c.key;button.disabled=true;button.textContent='Enviando…';try{const r=await fetch('/api/library/'+jobId+'/clips/'+c.index+'/regenerate',{method:'POST',headers:{'Content-Type':'application/json','x-hydra-client-id':clientId()},body:JSON.stringify({mode})});if(!r.ok){let message='No pudimos ajustar este clip.';try{const body=await r.json();if(body.message)message=body.message}catch{}throw new Error(message)}const response=await r.json();if(response.accepted){button.textContent='Procesando en servidor…';markClipUpdating(jobId,c.index,'⟳ Actualizando video…');const done=await waitForClipChanges(jobId,{[String(c.index)]:oldKey},1,180000);if(!done){setClipUiState(jobId,c.index,null,'');throw new Error('Hydra no terminó este ajuste a tiempo.')}return}if(activeResult){const idx=activeResult.clips.findIndex(x=>x.index===c.index);if(idx>=0)activeResult.clips[idx]=response;render(activeResult)}}catch(e){alert(friendlyError(e.message||e))}finally{button.disabled=false;button.textContent=old}}
+async function regenerateClip(jobId,c,mode,button){if(!jobId){alert('Este clip aún no está disponible para ajustar.');return}const old=button.textContent;const oldKey=c.key;button.disabled=true;button.textContent='Enviando…';try{const r=await fetch('/api/library/'+jobId+'/clips/'+c.index+'/regenerate',{method:'POST',headers:{'Content-Type':'application/json','x-hydra-client-id':clientId()},body:JSON.stringify({mode})});if(!r.ok){let message='No pudimos ajustar este clip.';try{const body=await r.json();if(body.message)message=body.message}catch{}throw new Error(message)}const response=await r.json();if(response.accepted){button.textContent='En cola…';markClipUpdating(jobId,c.index,'⟳ Cambio guardado · en cola');const done=await waitForClipChanges(jobId,{[String(c.index)]:oldKey},1,180000);if(!done){setClipUiState(jobId,c.index,null,'');throw new Error('Hydra no terminó este ajuste a tiempo.')}return}if(activeResult){const idx=activeResult.clips.findIndex(x=>x.index===c.index);if(idx>=0)activeResult.clips[idx]=response;render(activeResult)}}catch(e){alert(friendlyError(e.message||e))}finally{button.disabled=false;button.textContent=old}}
 function captionPolicyLabel(policy){if(policy==='FULL')return 'Subtítulos completos';if(policy==='REDUCED')return 'Subtítulos ligeros';if(policy==='KEY_MOMENTS')return 'Solo momentos clave';if(policy==='HOOK_ONLY')return 'Solo hook';if(policy==='NONE')return 'Sin subtítulos';return 'Captions adaptativos'}
 function createPlatformOverlay(c){
   const overlay=document.createElement('div');overlay.className='platform-overlay';overlay.setAttribute('aria-hidden','true');
