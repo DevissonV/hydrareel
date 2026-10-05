@@ -4,6 +4,7 @@ import { LayoutPreflightReport } from '../../rendering/domain/composition';
 export interface JobClip {
   index: number;
   key: string;
+  generatedAt?: string;
   title: string;
   hook: string;
   socialCaption: string;
