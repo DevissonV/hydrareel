@@ -50,6 +50,9 @@ describe('HeavyWorkQueue', () => {
       await gate.promise;
     }, { priority: 10 });
 
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(events).toEqual(['job-1']);
+
     const second = queue.enqueue('job:2', async () => {
       events.push('job-2');
     }, { priority: 10 });
@@ -58,7 +61,6 @@ describe('HeavyWorkQueue', () => {
       events.push('manual');
     }, { priority: 0 });
 
-    await new Promise((resolve) => setImmediate(resolve));
     gate.resolve();
     await Promise.all([first, second, manual]);
 
