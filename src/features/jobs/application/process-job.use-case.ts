@@ -18,6 +18,7 @@ import { buildLayoutPreflight } from '../../rendering/domain/composition';
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
   private runningJobId?: string;
+  private queueDraining = false;
 
   constructor(
     @Inject(CONFIG) private readonly config: HydraConfig,
@@ -71,20 +72,27 @@ export class ProcessJobUseCase implements OnModuleInit {
   }
 
   private async drainQueue(): Promise<void> {
-    if (this.runningJobId) return;
-    const queued = (await this.jobs.listActive())
-      .filter((job) => job.status === 'UPLOADED')
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    const next = queued[0];
-    if (!next) return;
-
-    this.runningJobId = next.id;
-    jobLog(next.id, 'queue_processing_started', { queuedAhead: 0 });
+    if (this.queueDraining || this.runningJobId) return;
+    this.queueDraining = true;
     try {
-      await this.run(next.id);
+      for (;;) {
+        if (this.runningJobId) return;
+        const queued = (await this.jobs.listActive())
+          .filter((job) => job.status === 'UPLOADED')
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        const next = queued[0];
+        if (!next) return;
+
+        this.runningJobId = next.id;
+        jobLog(next.id, 'queue_processing_started', { queuedAhead: 0 });
+        try {
+          await this.run(next.id);
+        } finally {
+          if (this.runningJobId === next.id) this.runningJobId = undefined;
+        }
+      }
     } finally {
-      if (this.runningJobId === next.id) this.runningJobId = undefined;
-      this.kickQueue();
+      this.queueDraining = false;
     }
   }
 
