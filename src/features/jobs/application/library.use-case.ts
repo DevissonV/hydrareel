@@ -35,11 +35,12 @@ export class LibraryUseCase {
     @Inject(CONFIG) private readonly config: HydraConfig,
   ) {}
 
-  private async purgeProject(jobId: string): Promise<number> {
+  private async purgeProject(clientId: string, jobId: string): Promise<number> {
     let deleted = 0;
     deleted += await this.storage.deletePrefix(`sources/${jobId}/`).catch(() => 0);
     deleted += await this.storage.deletePrefix(`transcripts/${jobId}/`).catch(() => 0);
     deleted += await this.storage.deletePrefix(`outputs/${jobId}/`).catch(() => 0);
+    await this.storage.deleteKeys([`clients/${clientId}/jobs/${jobId}.json`]).catch(() => undefined);
     await this.jobs.remove(jobId).catch(() => undefined);
     return deleted;
   }
@@ -57,9 +58,9 @@ export class LibraryUseCase {
     for (const job of states) {
       const updatedAt = job.updatedAt.getTime();
       if (job.status === 'FAILED' && updatedAt < failedCutoff) {
-        await this.purgeProject(job.id);
+        await this.purgeProject(clientId, job.id);
       } else if (job.status === 'UPLOADING' && updatedAt < uploadCutoff) {
-        await this.purgeProject(job.id);
+        await this.purgeProject(clientId, job.id);
       }
     }
   }
