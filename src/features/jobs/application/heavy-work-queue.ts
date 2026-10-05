@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 
 type WorkPriority = 0 | 10;
 
-interface QueueItem<T = unknown> {
+interface QueueItem {
   key: string;
   priority: WorkPriority;
   enqueuedAt: number;
-  run: () => Promise<T>;
-  resolve: (value: T) => void;
+  run: () => Promise<unknown>;
+  resolve: (value: unknown) => void;
   reject: (error: unknown) => void;
 }
 
@@ -39,8 +39,8 @@ export class HeavyWorkQueue {
     if (options.coalesce) {
       const existingIndex = this.pending.findIndex((item) => item.key === key);
       if (existingIndex >= 0) {
-        const existing = this.pending[existingIndex] as QueueItem<T>;
-        existing.run = run;
+        const existing = this.pending[existingIndex];
+        existing.run = run as () => Promise<unknown>;
         existing.priority = priority;
         existing.enqueuedAt = Date.now();
         this.sortPending();
@@ -49,7 +49,7 @@ export class HeavyWorkQueue {
           const originalReject = existing.reject;
           existing.resolve = (value) => {
             originalResolve(value);
-            resolve(value);
+            resolve(value as T);
           };
           existing.reject = (error) => {
             originalReject(error);
@@ -64,8 +64,8 @@ export class HeavyWorkQueue {
         key,
         priority,
         enqueuedAt: Date.now(),
-        run,
-        resolve,
+        run: run as () => Promise<unknown>,
+        resolve: resolve as (value: unknown) => void,
         reject,
       });
       this.sortPending();
