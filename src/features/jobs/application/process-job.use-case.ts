@@ -14,6 +14,7 @@ import { validateMediaDuration } from './input-validation';
 import { RenderGate } from './render-gate';
 import { emptyProjectMetrics } from '../domain/project-metrics';
 import { buildLayoutPreflight } from '../../rendering/domain/composition';
+import { HeavyWorkQueue } from './heavy-work-queue';
 
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
@@ -29,6 +30,7 @@ export class ProcessJobUseCase implements OnModuleInit {
     @Inject(CLIP_BRAIN_PORT) private readonly clipBrain: ClipBrainPort,
     @Inject(RENDERING_PORT) private readonly rendering: RenderingPort,
     private readonly renderGate: RenderGate,
+    private readonly heavyWork: HeavyWorkQueue,
   ) {}
 
   onModuleInit(): void {
@@ -49,7 +51,7 @@ export class ProcessJobUseCase implements OnModuleInit {
       await this.jobs.save(job);
       this.runningJobId = job.id;
       try {
-        await this.run(job.id);
+        await this.heavyWork.enqueue(`job:${job.id}`, () => this.run(job.id), { priority: 10 });
       } finally {
         if (this.runningJobId === job.id) this.runningJobId = undefined;
       }
@@ -86,7 +88,7 @@ export class ProcessJobUseCase implements OnModuleInit {
         this.runningJobId = next.id;
         jobLog(next.id, 'queue_processing_started', { queuedAhead: 0 });
         try {
-          await this.run(next.id);
+          await this.heavyWork.enqueue(`job:${next.id}`, () => this.run(next.id), { priority: 10 });
         } finally {
           if (this.runningJobId === next.id) this.runningJobId = undefined;
         }
