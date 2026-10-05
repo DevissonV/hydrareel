@@ -145,6 +145,7 @@ export class ProcessJobUseCase implements OnModuleInit {
         job.clips.push({
           index: index + 1,
           key,
+          generatedAt: new Date().toISOString(),
           title: clip.title,
           hook: clip.hook,
           socialCaption: clip.socialCaption,

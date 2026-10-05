@@ -173,6 +173,7 @@ export class RegenerateClipUseCase {
       const updated: JobClip = {
         index: clipIndex,
         key,
+        generatedAt: new Date().toISOString(),
         title: generated.clip.title,
         hook: generated.clip.hook,
         socialCaption: generated.clip.socialCaption,
@@ -323,6 +324,7 @@ export class RegenerateClipUseCase {
         const updated: JobClip = {
           ...original,
           key,
+          generatedAt: new Date().toISOString(),
           title: candidate.title,
           hook: candidate.hook,
           socialCaption: candidate.socialCaption,
