@@ -196,13 +196,17 @@ La meta no es sonar "viral" de forma artificial: debe sentirse como un post nati
       this.config.maxClipSeconds,
       this.config.maxClipsPerJob,
     );
-    const requested = Math.max(1, Math.min(2, limit));
-    const timeline = transcript.segments.map((s, index) => ({ index, start: s.start, end: s.end, text: s.text }));
+    const requested = Math.max(1, Math.min(4, limit));
     const usedRanges = existing.map((clip) => ({
       start: Number(clip.startSeconds.toFixed(2)),
       end: Number(clip.endSeconds.toFixed(2)),
       title: clip.title,
     }));
+    const overlapsUsedRange = (start: number, end: number) =>
+      usedRanges.some((range) => Math.max(start, range.start) < Math.min(end, range.end));
+    const timeline = transcript.segments
+      .map((s, index) => ({ index, start: s.start, end: s.end, text: s.text }))
+      .filter((segment) => !overlapsUsedRange(segment.start, segment.end));
     const schema = {
       type: 'object',
       additionalProperties: false,
@@ -237,7 +241,7 @@ La meta no es sonar "viral" de forma artificial: debe sentirse como un post nati
       schema,
       `Eres un editor senior buscando oportunidades que una primera pasada pudo dejar fuera. Encuentra hasta ${requested} clips ADICIONALES que sean realmente publicables y diferentes de los ya usados. No rellenes cuota: si no hay más momentos fuertes devuelve clips:[]. Cada nuevo clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos, entenderse sin contexto y cerrar su idea/payoff.
 
-Regla crítica de no repetición: no reutilices el mismo momento, argumento o payoff de los rangos ya usados. Evita solapar más de unos pocos segundos con cualquier rango existente. Prefiere otra historia, respuesta, broma, dato, tensión, reacción, opinión o transformación.
+Regla crítica de no repetición: no reutilices el mismo momento, argumento o payoff de los rangos ya usados. La línea de tiempo recibida ya excluye segmentos cubiertos por clips existentes; trabaja únicamente con esos segmentos restantes. Prefiere otra historia, respuesta, broma, dato, tensión, reacción, opinión o transformación.
 
 Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socialCaption breve que agregue algo; exactamente 5 hashtags con #viral y #fyp más 3 relevantes; sin tono periodístico salvo que corresponda; sin clickbait falso. El score evalúa hook, retención, payoff, conversación y claridad.`,
       { duration: transcript.duration, policy, usedRanges, timeline },
