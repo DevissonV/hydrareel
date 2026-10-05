@@ -251,6 +251,146 @@ export class RegenerateClipUseCase {
     }
   }
 
+  async findMore(
+    rawClientId: string | undefined,
+    rawJobId: string,
+  ): Promise<{ added: number; clips: JobClip[] }> {
+    const clientId = assertUuid(rawClientId, 'clientId');
+    const jobId = assertUuid(rawJobId, 'jobId');
+
+    return this.heavyWork.enqueue(
+      `manual:${jobId}:find-more`,
+      () => this.findMoreNow(clientId, jobId),
+      { priority: 0, coalesce: true },
+    );
+  }
+
+  private async findMoreNow(
+    clientId: string,
+    jobId: string,
+  ): Promise<{ added: number; clips: JobClip[] }> {
+    const releaseRender = await this.renderGate.acquire(`find-more:${jobId}`);
+    const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
+    const dir = path.join(os.tmpdir(), 'hydrareel-find-more', jobId);
+    const sourcePath = path.join(dir, 'source.mp4');
+
+    try {
+      const manifest = await this.storage.getJson<LibraryManifest>(manifestKey);
+      if (manifest.clientId !== clientId || manifest.id !== jobId) {
+        throw new NotFoundException('Proyecto no encontrado');
+      }
+
+      const storedTranscript = await this.storage.getJson<Omit<Transcript, 'model'> & { model?: string }>(
+        `transcripts/${jobId}/transcript.json`,
+      );
+      const transcript: Transcript = {
+        ...storedTranscript,
+        model: storedTranscript.model ?? 'stored-transcript',
+      };
+
+      const existingCandidates: ClipCandidate[] = manifest.clips.map((clip) => ({
+        startSeconds: clip.startSeconds,
+        endSeconds: clip.endSeconds,
+        title: clip.title,
+        hook: clip.hook ?? clip.title,
+        reason: clip.reason,
+        socialCaption: clip.socialCaption ?? clip.reason,
+        hashtags: clip.hashtags?.length ? clip.hashtags : ['#viral', '#fyp', '#video', '#shorts', '#HydraReel'],
+        emphasisTerms: clip.emphasisTerms ?? [],
+        score: clip.score,
+      }));
+
+      const more = await this.clipBrain.selectMore(transcript, existingCandidates, 2);
+      if (!more.clips.length) return { added: 0, clips: [] };
+
+      await mkdir(dir, { recursive: true });
+      await this.storage.downloadToFile(manifest.sourceKey, sourcePath);
+      const sourceMeta = await this.media.probe(sourcePath);
+      if (!sourceMeta.width || !sourceMeta.height || !sourceMeta.hasAudio) {
+        throw new Error('El source del proyecto no es válido para generar más clips');
+      }
+
+      let nextIndex = Math.max(0, ...manifest.clips.map((clip) => clip.index)) + 1;
+      const added: JobClip[] = [];
+      for (const candidate of more.clips) {
+        const index = nextIndex++;
+        const subtitlesPath = path.join(dir, `captions-${index}.ass`);
+        const outputPath = path.join(dir, `output-${index}.mp4`);
+        const framing = sourceMeta.width / sourceMeta.height > 0.82 ? 'subject-safe' as const : 'fill' as const;
+        const plan = this.rendering.createPlan(transcript, candidate);
+        const captionStyle: CaptionStyle = plan.composition?.identity ?? 'clean';
+        const captionCueCount = await this.rendering.writeSubtitles(
+          subtitlesPath,
+          transcript,
+          candidate,
+          { hook: candidate.hook, captionStyle, plan },
+        );
+        await this.rendering.render(sourcePath, outputPath, subtitlesPath, candidate, {
+          sourceWidth: sourceMeta.width,
+          sourceHeight: sourceMeta.height,
+          hook: candidate.hook,
+          captionStyle,
+          plan,
+        });
+
+        const outputMeta = await this.media.probe(outputPath);
+        const key = `outputs/${jobId}/clip-${String(index).padStart(2, '0')}-extra-${Date.now()}.mp4`;
+        await this.storage.uploadFile(key, outputPath, 'video/mp4');
+
+        const clip: JobClip = {
+          index,
+          key,
+          generatedAt: new Date().toISOString(),
+          title: candidate.title,
+          hook: candidate.hook,
+          socialCaption: candidate.socialCaption,
+          hashtags: candidate.hashtags,
+          emphasisTerms: candidate.emphasisTerms,
+          magicEdit: {
+            silenceCuts: plan.silenceCuts,
+            removedSeconds: plan.removedSeconds,
+            punchIns: plan.punchIns.length,
+            audioPolished: plan.audioPolished,
+            colorPolished: plan.colorPolished,
+          },
+          captionStyle,
+          captionPolicy: plan.composition?.captionPolicy,
+          platform: plan.composition?.platform ?? 'tiktok',
+          preflight: plan.composition ? buildLayoutPreflight(plan.composition) : undefined,
+          framing,
+          durationSeconds: outputMeta.durationSeconds,
+          score: candidate.score,
+          reason: candidate.reason,
+          startSeconds: candidate.startSeconds,
+          endSeconds: candidate.endSeconds,
+          captionCueCount,
+          video: {
+            width: outputMeta.width,
+            height: outputMeta.height,
+            codec: outputMeta.videoCodec,
+            audioCodec: outputMeta.audioCodec,
+          },
+        };
+        manifest.clips.push(clip);
+        added.push(clip);
+      }
+
+      manifest.completedAt = new Date().toISOString();
+      await this.storage.putJson(manifestKey, manifest);
+
+      const job = await this.jobs.get(jobId);
+      if (job && job.clientId === clientId) {
+        job.clips = [...manifest.clips];
+        await this.jobs.save(job);
+      }
+
+      return { added: added.length, clips: added };
+    } finally {
+      releaseRender();
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   async refreshFromCorrectedTranscript(
     clientId: string,
     jobId: string,

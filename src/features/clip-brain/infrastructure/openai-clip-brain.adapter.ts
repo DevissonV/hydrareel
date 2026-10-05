@@ -183,6 +183,86 @@ La meta no es sonar "viral" de forma artificial: debe sentirse como un post nati
     return { clips, usage };
   }
 
+  async selectMore(
+    transcript: Transcript,
+    existing: ClipCandidate[],
+    limit = 2,
+  ): Promise<ClipBrainResult> {
+    if (!this.config.openaiApiKey) throw new Error('OPENAI_API_KEY no está configurada');
+
+    const policy = clipPolicyForDuration(
+      transcript.duration,
+      this.config.minClipSeconds,
+      this.config.maxClipSeconds,
+      this.config.maxClipsPerJob,
+    );
+    const requested = Math.max(1, Math.min(2, limit));
+    const timeline = transcript.segments.map((s, index) => ({ index, start: s.start, end: s.end, text: s.text }));
+    const usedRanges = existing.map((clip) => ({
+      start: Number(clip.startSeconds.toFixed(2)),
+      end: Number(clip.endSeconds.toFixed(2)),
+      title: clip.title,
+    }));
+    const schema = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['clips'],
+      properties: {
+        clips: {
+          type: 'array',
+          minItems: 0,
+          maxItems: requested,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['startSeconds', 'endSeconds', 'title', 'hook', 'reason', 'socialCaption', 'hashtags', 'emphasisTerms', 'score'],
+            properties: {
+              startSeconds: { type: 'number', minimum: 0 },
+              endSeconds: { type: 'number', minimum: 0 },
+              title: { type: 'string', maxLength: 80 },
+              hook: { type: 'string', maxLength: 80 },
+              reason: { type: 'string', maxLength: 220 },
+              socialCaption: { type: 'string', maxLength: 500 },
+              hashtags: { type: 'array', minItems: 5, maxItems: 5, items: { type: 'string', maxLength: 40 } },
+              emphasisTerms: { type: 'array', minItems: 0, maxItems: 6, items: { type: 'string', maxLength: 40 } },
+              score: { type: 'number', minimum: 0, maximum: 100 },
+            },
+          },
+        },
+      },
+    };
+
+    const { parsed, usage } = await this.structured(
+      'hydrareel_more_clips',
+      schema,
+      `Eres un editor senior buscando oportunidades que una primera pasada pudo dejar fuera. Encuentra hasta ${requested} clips ADICIONALES que sean realmente publicables y diferentes de los ya usados. No rellenes cuota: si no hay más momentos fuertes devuelve clips:[]. Cada nuevo clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos, entenderse sin contexto y cerrar su idea/payoff.
+
+Regla crítica de no repetición: no reutilices el mismo momento, argumento o payoff de los rangos ya usados. Evita solapar más de unos pocos segundos con cualquier rango existente. Prefiere otra historia, respuesta, broma, dato, tensión, reacción, opinión o transformación.
+
+Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socialCaption breve que agregue algo; exactamente 5 hashtags con #viral y #fyp más 3 relevantes; sin tono periodístico salvo que corresponda; sin clickbait falso. El score evalúa hook, retención, payoff, conversación y claridad.`,
+      { duration: transcript.duration, policy, usedRanges, timeline },
+    );
+
+    const candidates = validateAndNormalizeCandidates(
+      parsed,
+      policy.minSeconds,
+      policy.maxSeconds,
+      transcript.duration,
+      requested,
+    );
+
+    const overlapRatio = (a: ClipCandidate, b: ClipCandidate) => {
+      const overlap = Math.max(0, Math.min(a.endSeconds, b.endSeconds) - Math.max(a.startSeconds, b.startSeconds));
+      const shorter = Math.max(0.001, Math.min(a.endSeconds - a.startSeconds, b.endSeconds - b.startSeconds));
+      return overlap / shorter;
+    };
+
+    const unique = candidates.filter((candidate) =>
+      existing.every((current) => overlapRatio(candidate, current) < 0.25),
+    );
+    return { clips: unique, usage };
+  }
+
   async review(transcript: Transcript, clips: ClipCandidate[]): Promise<ClipBrainResult> {
     if (!clips.length) return { clips: [] };
 
