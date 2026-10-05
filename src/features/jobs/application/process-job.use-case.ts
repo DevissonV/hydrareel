@@ -119,12 +119,41 @@ export class ProcessJobUseCase implements OnModuleInit {
       job.transition('TRANSCRIBING');
       await this.jobs.save(job);
       const t0 = Date.now();
-      await this.media.extractAudio(sourcePath, audioPath);
-      const transcript = await this.transcription.transcribe(audioPath);
+      const transcriptKey = `transcripts/${job.id}/transcript.json`;
+      let transcript;
+      let transcriptReused = false;
+      try {
+        const cached = await this.storage.getJson<any>(transcriptKey);
+        if (cached && (cached.segments?.length || cached.words?.length)) {
+          transcript = {
+            text: String(cached.text ?? ''),
+            duration: Number(cached.duration ?? sourceMeta.durationSeconds),
+            words: Array.isArray(cached.words) ? cached.words : [],
+            segments: Array.isArray(cached.segments) ? cached.segments : [],
+            model: String(cached.model ?? 'whisper-1'),
+            usage: cached.usage,
+          };
+          transcriptReused = true;
+        }
+      } catch {
+        transcript = undefined;
+      }
+      if (!transcript) {
+        await this.media.extractAudio(sourcePath, audioPath);
+        transcript = await this.transcription.transcribe(audioPath);
+        await this.storage.putJson(transcriptKey, {
+          jobId: job.id,
+          duration: transcript.duration,
+          text: transcript.text,
+          words: transcript.words,
+          segments: transcript.segments,
+          model: transcript.model,
+          usage: transcript.usage,
+        });
+      }
       job.timings.transcriptionDurationMs = Date.now() - t0;
-      job.usage.transcription = transcript.usage;
-      await this.storage.putJson(`transcripts/${job.id}/transcript.json`, { jobId: job.id, duration: transcript.duration, text: transcript.text, words: transcript.words, segments: transcript.segments });
-      jobLog(job.id, 'transcription_completed', { transcriptionDurationMs: job.timings.transcriptionDurationMs, words: transcript.words.length, segments: transcript.segments.length, model: transcript.model });
+      job.usage.transcription = transcriptReused ? { reused: true, previous: transcript.usage } : transcript.usage;
+      jobLog(job.id, transcriptReused ? 'transcription_reused' : 'transcription_completed', { transcriptionDurationMs: job.timings.transcriptionDurationMs, words: transcript.words.length, segments: transcript.segments.length, model: transcript.model });
 
       job.transition('ANALYZING');
       await this.jobs.save(job);

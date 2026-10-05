@@ -27,6 +27,11 @@ interface LibraryManifest {
   completedAt: string;
   metrics?: ProjectMetrics;
   clips: JobClip[];
+  editorialCache?: {
+    candidates: ClipCandidate[];
+    exhausted: boolean;
+    updatedAt: string;
+  };
 }
 
 function assertUuid(value: string | undefined, name: string): string {
@@ -300,8 +305,35 @@ export class RegenerateClipUseCase {
         score: clip.score,
       }));
 
-      const more = await this.clipBrain.selectMore(transcript, existingCandidates, 2);
-      if (!more.clips.length) return { added: 0, clips: [] };
+      const overlapRatio = (a: ClipCandidate, b: ClipCandidate) => {
+        const overlap = Math.max(0, Math.min(a.endSeconds, b.endSeconds) - Math.max(a.startSeconds, b.startSeconds));
+        const shorter = Math.max(0.001, Math.min(a.endSeconds - a.startSeconds, b.endSeconds - b.startSeconds));
+        return overlap / shorter;
+      };
+      const stillUnique = (candidate: ClipCandidate) =>
+        existingCandidates.every((current) => overlapRatio(candidate, current) < 0.25);
+
+      let pool = (manifest.editorialCache?.candidates ?? []).filter(stillUnique);
+      let exhausted = manifest.editorialCache?.exhausted ?? false;
+
+      if (!pool.length && !exhausted) {
+        const more = await this.clipBrain.selectMore(transcript, existingCandidates, 4);
+        pool = more.clips.filter(stillUnique);
+        exhausted = more.clips.length < 4;
+      }
+
+      if (!pool.length) {
+        manifest.editorialCache = {
+          candidates: [],
+          exhausted: true,
+          updatedAt: new Date().toISOString(),
+        };
+        await this.storage.putJson(manifestKey, manifest);
+        return { added: 0, clips: [] };
+      }
+
+      const candidatesToRender = pool.slice(0, 2);
+      const remainingCandidates = pool.slice(2);
 
       await mkdir(dir, { recursive: true });
       await this.storage.downloadToFile(manifest.sourceKey, sourcePath);
@@ -312,7 +344,7 @@ export class RegenerateClipUseCase {
 
       let nextIndex = Math.max(0, ...manifest.clips.map((clip) => clip.index)) + 1;
       const added: JobClip[] = [];
-      for (const candidate of more.clips) {
+      for (const candidate of candidatesToRender) {
         const index = nextIndex++;
         const subtitlesPath = path.join(dir, `captions-${index}.ass`);
         const outputPath = path.join(dir, `output-${index}.mp4`);
@@ -376,6 +408,11 @@ export class RegenerateClipUseCase {
       }
 
       manifest.completedAt = new Date().toISOString();
+      manifest.editorialCache = {
+        candidates: remainingCandidates,
+        exhausted,
+        updatedAt: new Date().toISOString(),
+      };
       await this.storage.putJson(manifestKey, manifest);
 
       const job = await this.jobs.get(jobId);
@@ -518,6 +555,7 @@ export class RegenerateClipUseCase {
         };
 
         manifest.clips = manifest.clips.map((clip) => clip.index === original.index ? updated : clip);
+        manifest.editorialCache = undefined;
         const transcriptMetrics = normalizeProjectMetrics(manifest.metrics);
         transcriptMetrics.clipsUpdatedFromTranscript += 1;
         manifest.metrics = transcriptMetrics;
