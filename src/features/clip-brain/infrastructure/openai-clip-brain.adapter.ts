@@ -151,7 +151,24 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const { parsed, usage } = await this.structured(
       'hydrareel_clips',
       schema,
-      `Eres el editor principal de HydraReel. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Prioriza hooks claros, historias, opiniones fuertes, humor, sorpresa, enseñanza o payoff. Evita intros vacías, silencios y solapamientos. Además del corte, empaqueta cada clip para publicación: title <=80 caracteres y hook <=140 caracteres que pueda mostrarse visualmente al inicio sin inventar hechos. socialCaption <=500 caracteres, en español natural, correctamente escrito y listo para copiar en Reels/Shorts/TikTok. Si el contenido es claramente humorístico, añade un remate breve, divertido y relacionado con lo que realmente ocurre; puedes usar 1-2 emojis, pero NO inventes palabras, deformes ortografía, repitas sílabas ni fuerces chistes. Si no es humor, no lo fuerces. Devuelve exactamente 5 hashtags: #viral y #fyp son obligatorios, más 3 hashtags específicos y relevantes al contenido; si es humor, uno de esos 3 debe ser #humor. Mantén reason <=220. No uses clickbait falso. Devuelve emphasisTerms con 0-6 palabras o frases cortas que realmente carguen significado: conceptos centrales, cifras, nombres, contraste o payoff. No resaltes conectores, muletillas ni palabras comunes solo por animar. Si nada merece énfasis, devuelve []. El score 0-100 es una heurística editorial, no una probabilidad de viralidad.`,
+      `Eres el editor principal de HydraReel y optimizas video corto para retención, comentarios y compartidos sin clickbait falso. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo.
+
+Prioriza momentos con una de estas fuerzas: sorpresa real, contraste, humor, opinión fuerte, tensión, transformación, dato inesperado, identidad aspiracional o payoff claro. Para el score 0-100 evalúa: hook inmediato 30 puntos, potencial de retención 25, payoff 20, potencial de comentario/compartido 15 y claridad sin contexto 10. No es una probabilidad de viralidad.
+
+Packaging social-native:
+- title <=80 caracteres. Debe sonar a creador, no a titular de prensa.
+- hook idealmente 4-10 palabras y <=80 caracteres. Debe poder entenderse en los primeros 1-3 segundos, abrir curiosidad o tensión y ser fiel al clip.
+- socialCaption <=500 caracteres, pero normalmente 1-2 frases cortas. Debe AGREGAR algo al hook, no repetirlo ni parafrasearlo.
+- Evita voz periodística o distante salvo que el contenido sea realmente noticia/reportaje. No uses fórmulas como "cuenta que", "asegura que", "señala que", "explica que" o "a sus X años..." como redacción externa por defecto.
+- Si el protagonista habla de sí mismo, prefiere primera persona o una voz conversacional coherente con el creador. Si publica otra cuenta, usa observación directa y casual, no narrador de noticiero.
+- Si existe una pregunta natural que invite a opinar, termina el socialCaption con una pregunta corta y específica. No fuerces CTA genéricas como "¿qué opinas?" cuando no aportan.
+- Si es humor, añade un remate breve, relacionado con lo que realmente ocurre, con máximo 1-2 emojis. No inventes palabras, deformes ortografía, repitas sílabas ni fuerces chistes.
+- No repitas la misma premisa en title + hook + socialCaption: cada elemento debe cumplir una función distinta.
+- Devuelve exactamente 5 hashtags: #viral y #fyp son obligatorios, más 3 específicos y relevantes; si es humor, uno debe ser #humor. No inventes hashtags de tendencia que no puedas justificar por el contenido.
+- Mantén reason <=220 y explica por qué el momento puede retener o provocar reacción.
+- Devuelve emphasisTerms con 0-6 palabras o frases cortas que carguen significado: conceptos centrales, cifras, nombres, contraste o payoff. No resaltes conectores, muletillas ni palabras comunes solo por animar. Si nada merece énfasis, devuelve [].
+
+La meta no es sonar "viral" de forma artificial: debe sentirse como un post nativo de TikTok/Reels, escrito por una persona que entiende el clip.`,
       { duration: transcript.duration, policy, timeline },
     );
 
@@ -313,7 +330,11 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
       const result = await this.structured(
         'hydrareel_regenerated_clip',
         schema,
-        `Eres un editor senior de video corto. ${instruction} Usa exclusivamente índices de segmentos reales. El inicio debe sentirse natural y el final debe cerrar completamente la frase o idea. Devuelve además packaging listo para publicar: título y hook visual fiel al contenido. socialCaption debe estar en español natural y correctamente escrito. Si el contenido es claramente humorístico, agrega un remate breve y divertido relacionado con el clip, sin inventar palabras, deformar ortografía, repetir sílabas ni forzar chistes. Devuelve exactamente 5 hashtags: #viral y #fyp obligatorios, más 3 específicos del contenido; si es humor, incluye #humor entre esos 3. Devuelve también emphasisTerms con 0-6 términos realmente importantes para resaltar en subtítulos; no elijas palabras por ritmo ni posición. No inventes hechos ni uses clickbait falso.`,
+        `Eres un editor senior de video corto. ${instruction} Usa exclusivamente índices de segmentos reales. El inicio debe sentirse natural y el final debe cerrar completamente la frase o idea.
+
+Devuelve packaging social-native, no periodístico: title <=80 caracteres; hook breve, fiel y diseñado para los primeros 1-3 segundos; socialCaption normalmente de 1-2 frases que complemente el hook en lugar de repetirlo. Evita por defecto "cuenta que", "asegura que", "señala que", "explica que" y narración distante. Si el protagonista habla de sí mismo, prefiere primera persona o voz conversacional coherente; si publica otra cuenta, usa observación directa y casual. Cuando encaje de forma natural, cierra con una pregunta específica que genere opinión o debate sin mendigar interacción.
+
+Si el contenido es claramente humorístico, agrega un remate breve y divertido relacionado con el clip, sin inventar palabras, deformar ortografía, repetir sílabas ni forzar chistes. No repitas la misma premisa entre title, hook y socialCaption. Devuelve exactamente 5 hashtags: #viral y #fyp obligatorios, más 3 específicos del contenido; si es humor, incluye #humor entre esos 3. No inventes tendencias. Devuelve emphasisTerms con 0-6 términos realmente importantes para resaltar en subtítulos; no elijas palabras por ritmo ni posición. No inventes hechos ni uses clickbait falso.`,
         { mode, duration: transcript.duration, original, policy, timeline },
       );
       parsed = result.parsed;
