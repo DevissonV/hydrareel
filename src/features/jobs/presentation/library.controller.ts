@@ -81,6 +81,20 @@ export class LibraryController {
     return this.transcriptCorrection.updateClip(clientId, jobId, clipIndex, body.text);
   }
 
+  @Post(':jobId/find-more')
+  findMoreClips(
+    @Headers('x-hydra-client-id') clientId: string | undefined,
+    @Param('jobId') jobId: string,
+  ) {
+    const task = this.regenerate.findMore(clientId, jobId);
+    void task.catch((error) => {
+      this.logger.error(
+        `background_find_more_failed jobId=${jobId} error=${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+    return { accepted: true };
+  }
+
   @Post(':jobId/clips/:clipIndex/regenerate')
   regenerateClip(
     @Headers('x-hydra-client-id') clientId: string | undefined,
