@@ -410,7 +410,7 @@ export class RegenerateClipUseCase {
       manifest.completedAt = new Date().toISOString();
       manifest.editorialCache = {
         candidates: remainingCandidates,
-        exhausted: exhausted && remainingCandidates.length === 0,
+        exhausted,
         updatedAt: new Date().toISOString(),
       };
       await this.storage.putJson(manifestKey, manifest);
