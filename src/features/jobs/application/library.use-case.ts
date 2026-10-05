@@ -253,22 +253,39 @@ export class LibraryUseCase {
     const jobId = assertUuid(rawJobId, 'jobId');
     const manifestKey = `clients/${clientId}/jobs/${jobId}.json`;
 
-    let manifest: LibraryManifest;
+    const job = await this.jobs.get(jobId);
+    let manifest: LibraryManifest | undefined;
     try {
       manifest = await this.storage.getJson<LibraryManifest>(manifestKey);
     } catch {
+      manifest = undefined;
+    }
+
+    const ownedByJob = Boolean(job && job.clientId === clientId);
+    const ownedByManifest = Boolean(manifest && manifest.clientId === clientId && manifest.id === jobId);
+    if (!ownedByJob && !ownedByManifest) {
       throw new NotFoundException('Proyecto no encontrado');
     }
-    if (manifest.clientId !== clientId || manifest.id !== jobId) {
-      throw new NotFoundException('Proyecto no encontrado');
+
+    if (job && !['COMPLETED', 'FAILED'].includes(job.status)) {
+      throw new BadRequestException('Espera a que el proyecto termine antes de eliminarlo');
     }
 
     let objectsDeleted = 0;
     objectsDeleted += await this.storage.deletePrefix(`sources/${jobId}/`);
     objectsDeleted += await this.storage.deletePrefix(`transcripts/${jobId}/`);
     objectsDeleted += await this.storage.deletePrefix(`outputs/${jobId}/`);
-    await this.storage.deleteKeys([manifestKey, `job-state/${jobId}.json`]);
-    objectsDeleted += 2;
+
+    if (manifest) {
+      await this.storage.deleteKeys([manifestKey]);
+      objectsDeleted += 1;
+    }
+    if (job) {
+      await this.jobs.remove(jobId);
+      objectsDeleted += 1;
+    } else {
+      await this.storage.deleteKeys([`job-state/${jobId}.json`]).catch(() => undefined);
+    }
 
     return { deleted: true, jobId, objectsDeleted };
   }

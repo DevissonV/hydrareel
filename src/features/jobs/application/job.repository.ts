@@ -11,6 +11,7 @@ export interface JobRepository {
   countActive(): Promise<number>;
   listActive(): Promise<Job[]>;
   listByClient(clientId: string): Promise<Job[]>;
+  remove(id: string): Promise<void>;
 }
 
 @Injectable()
@@ -54,6 +55,11 @@ export class DurableJobRepository implements JobRepository {
     return (await this.listAll())
       .filter((job) => job.clientId === clientId)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  async remove(id: string): Promise<void> {
+    this.cache.delete(id);
+    await this.storage.deleteKeys([this.key(id)]);
   }
 
   private isFresh(job: Job): boolean {
