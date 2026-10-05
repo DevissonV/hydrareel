@@ -3,6 +3,7 @@ import { OBJECT_STORAGE, ObjectStoragePort } from '../../storage/application/obj
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
 import { JobClip } from '../domain/job.entity';
 import { normalizeProjectMetrics, ProjectMetrics } from '../domain/project-metrics';
+import { CONFIG, HydraConfig } from '../../../config';
 
 interface LibraryManifest {
   id: string;
@@ -26,13 +27,46 @@ function assertUuid(value: string | undefined, name: string): string {
 
 @Injectable()
 export class LibraryUseCase {
+  private readonly lastRetentionSweep = new Map<string, number>();
+
   constructor(
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     @Inject(JOB_REPOSITORY) private readonly jobs: JobRepository,
+    @Inject(CONFIG) private readonly config: HydraConfig,
   ) {}
+
+  private async purgeProject(jobId: string): Promise<number> {
+    let deleted = 0;
+    deleted += await this.storage.deletePrefix(`sources/${jobId}/`).catch(() => 0);
+    deleted += await this.storage.deletePrefix(`transcripts/${jobId}/`).catch(() => 0);
+    deleted += await this.storage.deletePrefix(`outputs/${jobId}/`).catch(() => 0);
+    await this.jobs.remove(jobId).catch(() => undefined);
+    return deleted;
+  }
+
+  private async sweepExpiredStorage(clientId: string): Promise<void> {
+    const now = Date.now();
+    const previous = this.lastRetentionSweep.get(clientId) ?? 0;
+    if (now - previous < 60 * 60 * 1000) return;
+    this.lastRetentionSweep.set(clientId, now);
+
+    const states = await this.jobs.listByClient(clientId);
+    const failedCutoff = now - this.config.failedProjectRetentionHours * 60 * 60 * 1000;
+    const uploadCutoff = now - this.config.staleUploadRetentionHours * 60 * 60 * 1000;
+
+    for (const job of states) {
+      const updatedAt = job.updatedAt.getTime();
+      if (job.status === 'FAILED' && updatedAt < failedCutoff) {
+        await this.purgeProject(job.id);
+      } else if (job.status === 'UPLOADING' && updatedAt < uploadCutoff) {
+        await this.purgeProject(job.id);
+      }
+    }
+  }
 
   async list(rawClientId?: string) {
     const clientId = assertUuid(rawClientId, 'clientId');
+    await this.sweepExpiredStorage(clientId);
     const [states, manifestKeys] = await Promise.all([
       this.jobs.listByClient(clientId),
       this.storage.listKeys(`clients/${clientId}/jobs/`),
@@ -110,6 +144,7 @@ export class LibraryUseCase {
 
   async metrics(rawClientId?: string) {
     const clientId = assertUuid(rawClientId, 'clientId');
+    await this.sweepExpiredStorage(clientId);
     const [states, manifestKeys] = await Promise.all([
       this.jobs.listByClient(clientId),
       this.storage.listKeys(`clients/${clientId}/jobs/`),
