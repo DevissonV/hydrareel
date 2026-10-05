@@ -16,6 +16,7 @@ export function loadConfig() {
     minClipSeconds: intEnv('MIN_CLIP_SECONDS', 20),
     maxClipSeconds: intEnv('MAX_CLIP_SECONDS', 60),
     maxConcurrentJobs: intEnv('MAX_CONCURRENT_JOBS', 1),
+    maxQueuedJobs: intEnv('MAX_QUEUED_JOBS', 3),
     presignedUrlTtlSeconds: intEnv('PRESIGNED_URL_TTL_SECONDS', 14400),
     openaiApiKey: process.env.OPENAI_API_KEY ?? process.env.OPENAI_COMPATIBLE_API_KEY ?? '',
     openaiBaseUrl: (process.env.OPENAI_BASE_URL ?? process.env.OPENAI_COMPATIBLE_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, ''),
