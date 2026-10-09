@@ -311,7 +311,7 @@ Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socia
       const result = await this.structured(
         'hydrareel_editorial_qa',
         schema,
-        `Eres el control editorial final de HydraReel. Antes de renderizar, revisa cada candidato como si fueras un editor humano exigente. Un clip se aprueba cuando se entiende solo, empieza de forma natural, termina después de cerrar la frase/idea/payoff y puede mejorarse usando únicamente límites reales de segmentos. Puedes mover inicio y final dentro de ${policy.minSeconds}-${policy.maxSeconds}s. Si no puedes MEJORAR con seguridad un candidato, approved=false: Hydra conservará el corte original válido en vez de perderlo. Mantén title <=80 caracteres y reason <=220. Devuelve una entrada por cada candidato.`,
+        `Eres el control editorial final de HydraReel. Evalúa si cada candidato realmente merece publicarse: claridad sin contexto, gancho fiel en los primeros segundos, cierre completo, ausencia de relleno y valor genuino para una audiencia. approved=false significa que NO es publicable, no simplemente que no se puede mejorar. approved=true puede mantener los límites originales cuando ya son correctos. Ajusta los límites solo si mejoran el corte sin eliminar premisas o remates. Usa índices reales de segmentos y límites entre ${policy.minSeconds}-${policy.maxSeconds}s. No apruebes por cumplir una cuota. Mantén title <=80 caracteres y reason <=220. Devuelve una entrada por cada candidato.`,
         { duration: transcript.duration, policy, candidates: clips, timeline },
       );
       parsed = result.parsed;
@@ -323,49 +323,55 @@ Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socia
       };
     }
 
-    const reviewedByIndex = new Map<number, ClipCandidate>();
+    const approved: ClipCandidate[] = [];
+    const seen = new Set<number>();
+    let rejected = 0;
+    let adjusted = 0;
+    let keptOriginal = 0;
     for (const item of parsed.clips ?? []) {
-      const original = clips[item.candidateIndex];
-      if (!original || !item.approved) continue;
+      const index = Number(item.candidateIndex);
+      if (!Number.isInteger(index) || seen.has(index) || !clips[index]) continue;
+      seen.add(index);
+      if (item.approved !== true) {
+        rejected += 1;
+        continue;
+      }
+      const original = clips[index];
       const bounds = wordSafeBounds(transcript, item.startSegmentIndex, item.endSegmentIndex);
-      if (!bounds) continue;
-
-      const revised = validateAndNormalizeCandidates(
+      const proposal = bounds ? validateAndNormalizeCandidates(
         { clips: [{
+          ...original,
           startSeconds: bounds.startSeconds,
           endSeconds: bounds.endSeconds,
           title: String(item.title || original.title),
-          hook: original.hook,
           reason: String(item.reason || original.reason),
-          socialCaption: original.socialCaption,
-          hashtags: original.hashtags,
-          emphasisTerms: original.emphasisTerms,
           score: Number(item.score ?? original.score),
         }] },
-        policy.minSeconds,
-        policy.maxSeconds,
-        transcript.duration,
-        1,
-      );
-
-      if (revised[0]) reviewedByIndex.set(item.candidateIndex, revised[0]);
+        policy.minSeconds, policy.maxSeconds, transcript.duration, 1,
+      )[0] : undefined;
+      if (proposal) {
+        approved.push(proposal);
+        adjusted += 1;
+      } else {
+        // A positive editorial approval is distinct from the ability to adjust timing.
+        approved.push(original);
+        keptOriginal += 1;
+      }
     }
-
-    const merged = clips.map((original, index) => reviewedByIndex.get(index) ?? original);
+    // Missing decisions are not approvals; never silently convert them to publishable clips.
+    rejected += Math.max(0, clips.length - seen.size);
     const normalized = validateAndNormalizeCandidates(
-      { clips: merged },
-      policy.minSeconds,
-      policy.maxSeconds,
-      transcript.duration,
-      policy.maxClips,
+      { clips: approved }, policy.minSeconds, policy.maxSeconds,
+      transcript.duration, policy.maxClips,
     );
-
     return {
-      clips: normalized.length ? normalized : clips,
+      clips: normalized,
       usage: {
         editorialReview: usage,
-        improved: reviewedByIndex.size,
-        preservedOriginals: Math.max(0, clips.length - reviewedByIndex.size),
+        approved: normalized.length,
+        rejected,
+        adjusted,
+        keptOriginal,
       },
     };
   }
