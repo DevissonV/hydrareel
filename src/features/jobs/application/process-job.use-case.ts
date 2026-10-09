@@ -15,6 +15,7 @@ import { RenderGate } from './render-gate';
 import { emptyProjectMetrics } from '../domain/project-metrics';
 import { buildLayoutPreflight } from '../../rendering/domain/composition';
 import { HeavyWorkQueue } from './heavy-work-queue';
+import { inspectVisualContext } from '../../clip-brain/application/visual-context';
 
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
@@ -158,7 +159,9 @@ export class ProcessJobUseCase implements OnModuleInit {
       job.transition('ANALYZING');
       await this.jobs.save(job);
       const a0 = Date.now();
-      const selected = await this.clipBrain.select(transcript);
+      const visualContext = await inspectVisualContext(sourcePath, transcript, this.config);
+      const selected = await this.clipBrain.select(transcript, visualContext);
+      jobLog(job.id, 'visual_context_checked', { enriched: Boolean(visualContext) });
       const reviewed = await this.clipBrain.review(transcript, selected.clips);
       job.timings.analysisDurationMs = Date.now() - a0;
       job.usage.analysis = { selection: selected.usage, editorialReview: reviewed.usage };
