@@ -11,7 +11,7 @@ export interface ClipBrainResult {
 }
 
 export interface ClipBrainPort {
-  select(transcript: Transcript): Promise<ClipBrainResult>;
+  select(transcript: Transcript, visualContext?: string): Promise<ClipBrainResult>;
   selectMore(transcript: Transcript, existing: ClipCandidate[], limit?: number): Promise<ClipBrainResult>;
   review(transcript: Transcript, clips: ClipCandidate[]): Promise<ClipBrainResult>;
   regenerate(
