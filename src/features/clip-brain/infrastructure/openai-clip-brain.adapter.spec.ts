@@ -53,8 +53,7 @@ describe('editorial approval gate', () => {
 
   it('reports editorial service failure independently from explicit rejection', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
-    const result = await adapter().review(transcript as any, [candidate]);
-    expect(result.clips).toHaveLength(1);
-    expect((result.usage as any).reason).toBe('editorial_qa_unavailable');
+    await expect(adapter().review(transcript as any, [candidate]))
+      .rejects.toThrow('Control de calidad editorial no disponible');
   });
 });
