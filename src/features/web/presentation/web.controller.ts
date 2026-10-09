@@ -187,7 +187,30 @@ async function releaseScreen(){processingActive=false;try{await wakeLock?.releas
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&processingActive&&!wakeLock)void keepScreenAwake()});
 const order=['UPLOADING','TRANSCRIBING','ANALYZING','RENDERING','COMPLETED'];
 const pct={UPLOADING:12,UPLOADED:23,TRANSCRIBING:42,ANALYZING:67,RENDERING:86,COMPLETED:100,FAILED:100};
-function show(section){currentSection=section;home.hidden=section!=='home';processing.hidden=section!=='processing';results.hidden=section!=='results';library.hidden=section!=='library';navCreate.classList.toggle('active',section==='home'||section==='processing'||section==='results');navLibrary.classList.toggle('active',section==='library')}
+function show(section){
+  if(!['home','processing','results','library'].includes(section))section='home';
+  const previous=currentSection;
+  currentSection=section;
+  home.hidden=section!=='home';processing.hidden=section!=='processing';results.hidden=section!=='results';library.hidden=section!=='library';
+  navCreate.classList.toggle('active',section==='home'||section==='processing'||section==='results');
+  navLibrary.classList.toggle('active',section==='library');
+  // Navigation must be reversible without leaving the app or reloading an active upload.
+  if(!restoringNavigation&&previous!==section){
+    window.history.pushState({hydraSection:section},'',window.location.pathname+window.location.search+'#'+section);
+  }
+}
+let restoringNavigation=false;
+window.history.replaceState({hydraSection:'home'},'',window.location.pathname+window.location.search+'#home');
+window.addEventListener('popstate',event=>{
+  const section=event.state?.hydraSection||window.location.hash.slice(1)||'home';
+  restoringNavigation=true;
+  try{
+    if(section==='library'){show('library');void loadLibrary()}
+    else if(section==='results'&&activeResult)render(activeResult);
+    else if(section==='processing'){show('processing');void resumeActiveJob(true)}
+    else show('home');
+  }finally{restoringNavigation=false}
+});
 function setProgress(state,value){const p=value??pct[state]??5;ring.style.setProperty('--p',p);percent.textContent=Math.round(p)+'%';const effective=state==='UPLOADED'?'TRANSCRIBING':state;const idx=order.indexOf(effective);document.querySelectorAll('.step').forEach((el,i)=>{el.classList.toggle('active',i===idx);el.classList.toggle('done',i<idx);const dot=el.querySelector('.dot');if(i<idx)dot.textContent='✓'})}
 function setPickerBusy(busy){pick.classList.toggle('busy',busy);input.disabled=busy}
 function friendlyError(message){const raw=String(message||'');if(/ffmpeg|exited null|SIGKILL|Internal server error|statusCode|^\s*\{/i.test(raw))return 'No pudimos terminar esta edición. Tu video original quedó guardado para volver a intentarlo.';return raw||'No pudimos completar el procesamiento.'}
