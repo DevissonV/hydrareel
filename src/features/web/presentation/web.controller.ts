@@ -391,8 +391,31 @@ function addClip(c,total,jobId,fallbackGeneratedAt){
   const download=document.createElement('button');download.className='primary download';download.type='button';const nativeShare=!!navigator.share;download.textContent=nativeShare?'⇧ Guardar en Fotos':'↓ Descargar clip listo';download.dataset.defaultLabel=download.textContent;download.onclick=()=>void saveClipToPhotos(jobId,c,download);
   const correct=document.createElement('button');correct.className='secondary';correct.textContent='✎ Corregir texto';correct.onclick=()=>void openClipTranscriptEditor(jobId,c);
   const refine=document.createElement('details');refine.className='refine';const summary=document.createElement('summary');summary.textContent='Quiero ajustar este clip';const actions=document.createElement('div');actions.className='clip-actions';[['Más corto','shorter'],['Más largo','longer'],['Otro momento','alternative'],['Cambiar estilo','restyle']].forEach(([label,mode])=>{const b=document.createElement('button');b.className='clip-action';b.textContent=label;b.onclick=()=>regenerateClip(jobId,c,mode,b);actions.appendChild(b)});refine.append(summary,actions);
+  const feedback=document.createElement('div');feedback.className='clip-actions';feedback.setAttribute('aria-label','Califica la calidad del clip');
+  const feedbackNote=document.createElement('span');feedbackNote.className='meta';
+  const feedbackButtons=[['✓ Publicable','accepted'],['✕ Descartar','rejected']].map(([label,verdict])=>{
+    const button=document.createElement('button');button.type='button';button.className='clip-action';
+    button.textContent=label;
+    button.setAttribute('aria-pressed',String(c.feedback===verdict));
+    button.onclick=async()=>{
+      button.disabled=true;
+      feedbackNote.textContent='Guardando…';
+      try{
+        const response=await fetch('/api/library/'+encodeURIComponent(jobId)+'/clips/'+c.index+'/feedback',{
+          method:'PUT',headers:{'Content-Type':'application/json','x-hydra-client-id':clientId()},
+          body:JSON.stringify({verdict})
+        });
+        if(!response.ok)throw new Error('No se pudo guardar la evaluación');
+        c.feedback=verdict;
+        feedbackButtons.forEach((b,i)=>b.setAttribute('aria-pressed',String(['accepted','rejected'][i]===verdict)));
+        feedbackNote.textContent=verdict==='accepted'?'Marcado como publicable':'Marcado como descartado';
+      }catch(error){feedbackNote.textContent=error.message||'Error al guardar'}finally{button.disabled=false}
+    };
+    return button;
+  });
+  feedback.append(...feedbackButtons,feedbackNote);
   const editorial=document.createElement('details');editorial.className='editorial-note';const es=document.createElement('summary');es.textContent='Por qué Hydra eligió este momento';const ep=document.createElement('p');ep.textContent=c.reason;editorial.append(es,ep);
-  details.append(clipStatus,titleRow,meta,magic,pack,download,correct);if(!activeResult?.status||activeResult.status==='COMPLETED')details.append(refine);details.append(editorial);card.append(toolbar,shell,preflight,details);clips.appendChild(card)
+  details.append(clipStatus,titleRow,meta,magic,pack,download,correct,feedback);if(!activeResult?.status||activeResult.status==='COMPLETED')details.append(refine);details.append(editorial);card.append(toolbar,shell,preflight,details);clips.appendChild(card)
 }
 function render(job){activeResult={...job,clips:[...(job.clips||[])]};clips.innerHTML='';resultSummary.innerHTML='';findMore.hidden=activeResult.status&&activeResult.status!=='COMPLETED';findMore.disabled=false;findMore.textContent='✦ Buscar más clips';const list=activeResult.clips;const ready=totalClipSeconds(list);resultCopy.textContent=(activeResult.sourceDuration?mediaTime(activeResult.sourceDuration)+' original → ':'')+list.length+' '+(list.length===1?'clip':'clips')+' → '+mediaTime(ready)+' listos';const summaryItems=[];if(activeResult.sourceDuration)summaryItems.push(['Original',mediaTime(activeResult.sourceDuration)]);summaryItems.push(['Clips',String(list.length)]);if(ready>0)summaryItems.push(['Contenido listo',mediaTime(ready)]);if(activeResult.timings?.totalDurationMs)summaryItems.push(['Procesado en',mediaTime(activeResult.timings.totalDurationMs/1000)]);for(const [label,value] of summaryItems){const pill=document.createElement('span');pill.className='summary-pill';pill.innerHTML=label+' <strong>'+value+'</strong>';resultSummary.appendChild(pill)}const generatedFallback=activeResult.completedAt||activeResult.updatedAt||activeResult.createdAt;list.forEach(c=>addClip(c,list.length,activeResult.id,generatedFallback));show('results')}
 function queueStateLabel(status){
