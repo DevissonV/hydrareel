@@ -316,11 +316,12 @@ Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socia
       );
       parsed = result.parsed;
       usage = result.usage;
-    } catch {
-      return {
-        clips,
-        usage: { fallback: 'all_original_candidates', reason: 'editorial_qa_unavailable' },
-      };
+    } catch (error) {
+      // An unavailable reviewer is not an editorial approval: preserve the source
+      // and cached transcript for a later retry instead of publishing unreviewed clips.
+      throw new Error('Control de calidad editorial no disponible; reintenta el procesamiento', {
+        cause: error,
+      });
     }
 
     const approved: ClipCandidate[] = [];
