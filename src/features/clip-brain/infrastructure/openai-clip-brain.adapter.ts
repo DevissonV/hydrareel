@@ -110,7 +110,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     return { parsed: JSON.parse(outputText(data)), usage: data.usage };
   }
 
-  async select(transcript: Transcript): Promise<ClipBrainResult> {
+  async select(transcript: Transcript, visualContext?: string): Promise<ClipBrainResult> {
     if (!this.config.openaiApiKey) throw new Error('OPENAI_API_KEY no está configurada');
 
     const policy = clipPolicyForDuration(
@@ -151,7 +151,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const { parsed, usage } = await this.structured(
       'hydrareel_clips',
       schema,
-      `Eres el editor principal de HydraReel y optimizas video corto para retención, comentarios y compartidos sin clickbait falso. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo.
+      `Eres el editor principal de HydraReel y optimizas video corto para retención, comentarios y compartidos sin clickbait falso. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Si hay contexto visual, úsalo solo como evidencia suplementaria para valorar acciones o reacciones; nunca inventes eventos ni deduzcas una escena a partir de una sola imagen.
 
 Prioriza momentos con una de estas fuerzas: sorpresa real, contraste, humor, opinión fuerte, tensión, transformación, dato inesperado, identidad aspiracional o payoff claro. Para el score 0-100 evalúa: hook inmediato 30 puntos, potencial de retención 25, payoff 20, potencial de comentario/compartido 15 y claridad sin contexto 10. No es una probabilidad de viralidad.
 
@@ -169,7 +169,7 @@ Packaging social-native:
 - Devuelve emphasisTerms con 0-6 palabras o frases cortas que carguen significado: conceptos centrales, cifras, nombres, contraste o payoff. No resaltes conectores, muletillas ni palabras comunes solo por animar. Si nada merece énfasis, devuelve [].
 
 La meta no es sonar "viral" de forma artificial: debe sentirse como un post nativo de TikTok/Reels, escrito por una persona que entiende el clip.`,
-      { duration: transcript.duration, policy, timeline },
+      { duration: transcript.duration, policy, timeline, visualContext: visualContext ?? null },
     );
 
     const clips = validateAndNormalizeCandidates(
