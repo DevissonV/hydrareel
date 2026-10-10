@@ -37,6 +37,10 @@ export class LibraryUseCase {
   ) {}
 
   private async purgeProject(clientId: string, jobId: string): Promise<number> {
+    const job = await this.jobs.get(jobId);
+    if (job?.upload?.uploadId) {
+      await this.storage.abortMultipart(job.sourceKey, job.upload.uploadId).catch(() => undefined);
+    }
     let deleted = 0;
     deleted += await this.storage.deletePrefix(`sources/${jobId}/`).catch(() => 0);
     deleted += await this.storage.deletePrefix(`transcripts/${jobId}/`).catch(() => 0);

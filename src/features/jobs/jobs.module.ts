@@ -15,6 +15,7 @@ import { RegenerateClipUseCase } from './application/regenerate-clip.use-case';
 import { RenderGate } from './application/render-gate';
 import { TranscriptCorrectionUseCase } from './application/transcript-correction.use-case';
 import { HeavyWorkQueue } from './application/heavy-work-queue';
+import { UploadSessionUseCase } from './application/upload-session.use-case';
 
 @Module({
   imports: [StorageModule, MediaModule, TranscriptionModule, ClipBrainModule, RenderingModule],
@@ -30,6 +31,7 @@ import { HeavyWorkQueue } from './application/heavy-work-queue';
     RenderGate,
     TranscriptCorrectionUseCase,
     HeavyWorkQueue,
+    UploadSessionUseCase,
   ],
 })
 export class JobsModule {}

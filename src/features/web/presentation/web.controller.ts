@@ -106,6 +106,14 @@ const html = String.raw`<!doctype html>
           <div class="upload-meta" id="uploadMeta">Preparando archivo…</div>
         </div>
         <div id="batchQueue" class="batch-queue" hidden></div>
+        <div id="uploadNotice" role="status" aria-live="polite" style="margin:16px auto;padding:14px 16px;border:1px solid #a779ee66;border-radius:14px;background:#3f2b6d36;font-weight:700;line-height:1.5;max-width:610px">⚠ Mantén esta pantalla abierta mientras subimos los archivos.</div>
+        <div id="resumeBox" hidden style="margin:14px auto;padding:14px;border:1px solid #7283ab77;border-radius:14px;max-width:610px">
+          <p id="resumeText" style="margin:0 0 12px">La subida quedó pausada. Puedes continuar las partes que faltan.</p>
+          <label class="secondary" style="display:inline-block;cursor:pointer;padding:12px;border-radius:10px">
+            ↻ Seleccionar archivos para continuar
+            <input id="resumeFileInput" type="file" accept=".mp4,.mov,.webm,video/*" multiple style="display:none"/>
+          </label>
+        </div>
         <button id="cancelProcessing" type="button" class="secondary" style="margin:16px auto;display:block">✕ Cancelar procesamiento</button>
         <div class="steps">
           <div class="step" data-state="UPLOADING"><span class="dot">1</span><span><b>Preparando video</b><small>Subiendo el original de forma segura</small></span><span></span></div>
@@ -445,7 +453,7 @@ function addClip(c,total,jobId,fallbackGeneratedAt){
 }
 function render(job){activeResult={...job,clips:[...(job.clips||[])]};clips.innerHTML='';resultSummary.innerHTML='';findMore.hidden=activeResult.status&&activeResult.status!=='COMPLETED';findMore.disabled=false;findMore.textContent='✦ Buscar más clips';const list=activeResult.clips;const ready=totalClipSeconds(list);resultCopy.textContent=(activeResult.sourceDuration?mediaTime(activeResult.sourceDuration)+' original → ':'')+list.length+' '+(list.length===1?'clip':'clips')+' → '+mediaTime(ready)+' listos';const summaryItems=[];if(activeResult.sourceDuration)summaryItems.push(['Original',mediaTime(activeResult.sourceDuration)]);summaryItems.push(['Clips',String(list.length)]);if(ready>0)summaryItems.push(['Contenido listo',mediaTime(ready)]);if(activeResult.timings?.totalDurationMs)summaryItems.push(['Procesado en',mediaTime(activeResult.timings.totalDurationMs/1000)]);for(const [label,value] of summaryItems){const pill=document.createElement('span');pill.className='summary-pill';pill.innerHTML=label+' <strong>'+value+'</strong>';resultSummary.appendChild(pill)}const generatedFallback=activeResult.completedAt||activeResult.updatedAt||activeResult.createdAt;list.forEach(c=>addClip(c,list.length,activeResult.id,generatedFallback));show('results')}
 function queueStateLabel(status){
-  if(status==='UPLOADING')return 'Subiendo';
+  if(status==='UPLOADING')return 'Subiendo';if(status==='STORED')return 'Guardado';if(status==='PENDING')return 'Pendiente';
   if(status==='UPLOADED')return 'En cola';
   if(status==='TRANSCRIBING')return 'Entendiendo';
   if(status==='ANALYZING')return 'Analizando';
@@ -461,8 +469,8 @@ function renderBatchQueue(items){
   items.forEach((item,index)=>{
     const row=document.createElement('div');
     const active=['TRANSCRIBING','ANALYZING','RENDERING'].includes(item.status);
-    row.className='batch-item '+(item.status==='COMPLETED'?'done':item.status==='FAILED'?'fail':active?'active':'');
-    const num=document.createElement('span');num.className='batch-index';num.textContent=item.status==='COMPLETED'?'✓':String(index+1);
+    row.className='batch-item '+(item.status==='COMPLETED'||item.status==='STORED'?'done':item.status==='FAILED'?'fail':active?'active':'');
+    const num=document.createElement('span');num.className='batch-index';num.textContent=item.status==='COMPLETED'||item.status==='STORED'?'✓':String(index+1);
     const name=document.createElement('span');name.className='batch-name';name.textContent=item.name||item.originalFileName||('Video '+(index+1));
     const state=document.createElement('span');state.className='batch-state';state.textContent=queueStateLabel(item.status);
     row.append(num,name,state);batchQueue.appendChild(row);
@@ -476,7 +484,7 @@ const cancelProcessing=document.getElementById('cancelProcessing');
 let latestBatchItems=[];
 cancelProcessing.onclick=async()=>{
   const active=latestBatchItems.filter(x=>x.id&&!['COMPLETED','FAILED','CANCELLED'].includes(x.status));
-  if(!active.length&&!activeUploadRequest)return;
+  if(!active.length&&!activeUploadRequest&&!uploadInProgress&&!readUploadSession())return;
   if(!confirm('¿Cancelar la subida o procesamiento? Los archivos ya guardados se conservan.'))return;
   userCancelledUpload=true;
   cancelProcessing.disabled=true;cancelProcessing.textContent='Cancelando…';
@@ -486,6 +494,7 @@ cancelProcessing.onclick=async()=>{
     })));
     if(responses.some(r=>!r.ok))throw new Error('Algunos trabajos no pudieron cancelarse');
     if(activeUploadRequest)activeUploadRequest.abort();
+    localStorage.removeItem(UPLOAD_SESSION_KEY);
     cancelProcessing.textContent='✓ Cancelación solicitada';
   }catch(e){alert(e.message||'No pudimos cancelar');cancelProcessing.disabled=false;cancelProcessing.textContent='✕ Cancelar procesamiento'}
 };
@@ -519,46 +528,221 @@ async function pollBatch(ids,initialItems=[]){
     await new Promise(r=>setTimeout(r,2200));
   }
 }
+const UPLOAD_SESSION_KEY='hydra_pending_uploads_v3';
+const uploadNotice=document.getElementById('uploadNotice');
+const resumeBox=document.getElementById('resumeBox');
+const resumeText=document.getElementById('resumeText');
+const resumeFileInput=document.getElementById('resumeFileInput');
+let uploadInProgress=false;
+function saveUploadSession(session){
+  localStorage.setItem(UPLOAD_SESSION_KEY,JSON.stringify(session));
+  localStorage.setItem(BATCH_KEY,JSON.stringify(session.files.map(f=>f.id).filter(Boolean)));
+}
+function readUploadSession(){
+  try{const session=JSON.parse(localStorage.getItem(UPLOAD_SESSION_KEY)||'null');
+    return session&&Array.isArray(session.files)?session:null;
+  }catch{return null}
+}
+function setUploadNotice(message,safe){
+  uploadNotice.textContent=(safe?'✓ ':'⚠ ')+message;
+  uploadNotice.style.borderColor=safe?'#4de59b77':'#a779ee66';
+  uploadNotice.style.background=safe?'#12503944':'#3f2b6d36';
+  uploadNotice.hidden=false;
+}
+function updateBatchUploadProgress(session,index,bytes){
+  const total=session.files.reduce((n,f)=>n+f.size,0);
+  const already=session.files.reduce((n,f,i)=>n+(i===index?0:f.stored?f.size:0),0);
+  const done=Math.min(total,already+bytes);
+  const ratio=total?done/total:0;
+  setProgress('UPLOADING',Math.round(2+18*ratio));
+  filenameEl.textContent=session.files[index]?.name||'Preparando archivos';
+  uploadMeta.textContent='Subida '+(index+1)+' de '+session.files.length+' · '+(done/1048576).toFixed(1)+' de '+(total/1048576).toFixed(1)+' MB · '+Math.round(ratio*100)+'% transferido';
+  const items=session.files.map((f,i)=>({
+    id:f.id,name:f.name,status:f.stored?'STORED':i===index?'UPLOADING':'PENDING'
+  }));
+  renderBatchQueue(items);
+  latestBatchItems=items.filter(x=>x.id);
+}
+async function uploadApi(url,method,body){
+  const r=await fetch(url,{method,headers:{'x-hydra-client-id':clientId(),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  if(!r.ok){
+    let message='No se pudo verificar la subida';
+    try{const value=await r.json();message=Array.isArray(value.message)?value.message.join('. '):value.message||message}catch{}
+    throw new Error(message);
+  }
+  return r.json();
+}
+function sendUploadBlob(url,headers,blob,progress,timeoutMs){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    activeUploadRequest=xhr;
+    xhr.open('PUT',url,true);
+    xhr.timeout=timeoutMs;
+    Object.entries(headers||{}).forEach(([key,value])=>xhr.setRequestHeader(key,value));
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)progress(e.loaded)};
+    xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('El almacenamiento respondió HTTP '+xhr.status));
+    xhr.onerror=()=>reject(new Error('La transferencia se interrumpió'));
+    xhr.ontimeout=()=>reject(new Error('Tiempo de espera agotado'));
+    xhr.onabort=()=>reject(new Error('Transferencia cancelada'));
+    xhr.onloadend=()=>{if(activeUploadRequest===xhr)activeUploadRequest=null};
+    xhr.send(blob);
+  });
+}
+async function uploadWithRetries(urlFactory,blob,progress,timeoutMs){
+  for(let attempt=0;attempt<3;attempt++){
+    if(userCancelledUpload)throw new Error('Subida cancelada');
+    try{
+      const {url,headers}=await urlFactory();
+      await sendUploadBlob(url,headers,blob,progress,timeoutMs);
+      progress(blob.size);
+      return;
+    }catch(error){
+      if(userCancelledUpload||attempt===2)throw error;
+      progress(0);
+      await new Promise(resolve=>setTimeout(resolve,(attempt+1)*1200));
+    }
+  }
+}
+async function processUploadSession(session,chosenFiles){
+  if(uploadInProgress)return;
+  uploadInProgress=true;
+  userCancelledUpload=false;
+  resumeBox.hidden=true;
+  cancelProcessing.hidden=false;
+  setPickerBusy(true);
+  show('processing');
+  void keepScreenAwake();
+  setUploadNotice('No abandones esta pantalla: estamos transfiriendo tus videos.',false);
+  try{
+    const selected=Array.from(chosenFiles||[]);
+    for(let i=0;i<session.files.length;i++){
+      const entry=session.files[i];
+      if(userCancelledUpload)throw new Error('Subida cancelada');
+      if(entry.stored)continue;
+      const file=selected[i];
+      if(!entry.id&&(!file||file.name!==entry.name||file.size!==entry.size)){
+        throw new Error('Vuelve a seleccionar los mismos videos para continuar: '+entry.name);
+      }
+      if(!entry.id){
+        const created=await fetch('/api/jobs/upload-url',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({fileName:entry.name,contentType:entry.type,clientId:clientId(),sizeBytes:entry.size})
+        });
+        if(!created.ok)throw new Error('No pudimos reservar espacio para '+entry.name);
+        const data=await created.json();
+        entry.id=data.jobId;
+        entry.partSize=data.partSize||0;
+        entry.mode=data.mode||'single';
+        saveUploadSession(session);
+        latestBatchItems=session.files.filter(f=>f.id).map(f=>({id:f.id,name:f.name,status:f.stored?'STORED':'UPLOADING'}));
+      }
+      const status=await uploadApi('/api/jobs/'+entry.id+'/upload-status','GET');
+      if(status.status!=='UPLOADING'&&status.status!=='UPLOADED'){
+        throw new Error('Este proyecto ya no acepta archivos. Cancélalo y comienza uno nuevo.');
+      }
+      if(status.complete){
+        entry.stored=true;
+        saveUploadSession(session);
+        updateBatchUploadProgress(session,i,entry.size);
+        continue;
+      }
+      if(!file||file.name!==entry.name||file.size!==entry.size){
+        throw new Error('Selecciona el mismo archivo para continuar: '+entry.name);
+      }
+      if(status.mode==='multipart'){
+        const partSize=status.partSize||entry.partSize;
+        if(!partSize)throw new Error('Parte inválida. Reintenta este archivo.');
+        const count=Math.ceil(entry.size/partSize);
+        const received=new Map((status.parts||[]).map(p=>[p.partNumber,p.size]));
+        let transferred=0;
+        for(let part=1;part<=count;part++){
+          const start=(part-1)*partSize;
+          const end=Math.min(entry.size,start+partSize);
+          const length=end-start;
+          if(received.get(part)===length){transferred+=length;continue}
+          const piece=file.slice(start,end);
+          const base=transferred;
+          await uploadWithRetries(
+            ()=>uploadApi('/api/jobs/'+entry.id+'/part-url','POST',{partNumber:part}),
+            piece,bytes=>updateBatchUploadProgress(session,i,base+bytes),3*60*1000
+          );
+          transferred+=length;
+          updateBatchUploadProgress(session,i,transferred);
+        }
+        await uploadApi('/api/jobs/'+entry.id+'/complete-upload','POST');
+      }else{
+        await uploadWithRetries(
+          ()=>uploadApi('/api/jobs/'+entry.id+'/single-url','POST'),
+          file,bytes=>updateBatchUploadProgress(session,i,bytes),10*60*1000
+        );
+      }
+      const verified=await uploadApi('/api/jobs/'+entry.id+'/upload-status','GET');
+      if(!verified.complete)throw new Error('El archivo aún no está confirmado en almacenamiento: '+entry.name);
+      entry.stored=true;
+      saveUploadSession(session);
+      updateBatchUploadProgress(session,i,entry.size);
+    }
+    const ids=session.files.map(f=>f.id);
+    if(ids.some(id=>!id))throw new Error('Faltan videos del lote');
+    setUploadNotice('Subidas completas. Verificando y registrando todos los videos en la cola…',false);
+    await uploadApi('/api/jobs/queue-batch','POST',{jobIds:ids});
+    localStorage.removeItem(UPLOAD_SESSION_KEY);
+    uploadInProgress=false;
+    setUploadNotice('¡Todo listo! Todos los videos están guardados y en cola. Ya puedes salir de HydraReel.',true);
+    resumeBox.hidden=true;
+    cancelProcessing.hidden=false;
+    await pollBatch(ids,session.files.map(f=>({id:f.id,name:f.name,status:'UPLOADED'})));
+  }catch(error){
+    if(userCancelledUpload){
+      localStorage.removeItem(UPLOAD_SESSION_KEY);
+      localStorage.removeItem(BATCH_KEY);
+      localStorage.removeItem(JOB_KEY);
+      resumeBox.hidden=true;
+      setUploadNotice('Subida cancelada. Puedes comenzar otra carga.',true);
+      setPickerBusy(false);
+      return;
+    }
+    const message=error?.message||String(error);
+    uploadMeta.textContent=message;
+    resumeText.textContent='La subida se interrumpió: '+message+'. Selecciona los mismos archivos para continuar sin repetir las partes confirmadas.';
+    resumeBox.hidden=false;
+    setUploadNotice('Subida incompleta. Aún no puedes salir y dejar el lote procesando. Reintenta para completarla.',false);
+    setPickerBusy(false);
+  }finally{
+    uploadInProgress=false;
+  }
+}
 async function handleSelectedFiles(fileList){
   const files=Array.from(fileList||[]);
   if(!files.length)return;
+  if(uploadInProgress)return;
   if(files.length>MAX_BATCH_FILES){alert('Puedes seleccionar máximo 3 videos por lote.');input.value='';return}
-  const totalBytes=files.reduce((sum,file)=>sum+file.size,0);
-  if(totalBytes>MAX_BATCH_BYTES){alert('El lote supera 1 GB. Reduce el tamaño o selecciona menos videos.');input.value='';return}
-  userCancelledUpload=false;pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);show('processing');
-  cancelProcessing.hidden=false;cancelProcessing.disabled=false;cancelProcessing.textContent='✕ Cancelar procesamiento';void keepScreenAwake();
-  const batchItems=files.map((file,index)=>({name:file.name,status:index===0?'UPLOADING':'PENDING'}));
-  renderBatchQueue(batchItems);
-  const ids=[];
-  const serverItems=[];
-  try{
-    for(let index=0;index<files.length;index++){
-      if(userCancelledUpload)throw new Error('Subida cancelada');
-      const f=files[index];
-      filenameEl.textContent=f.name;
-      setProgress('UPLOADING',3);
-      batchItems[index].status='UPLOADING';renderBatchQueue(batchItems);
-      const sizeMb=f.size/1048576;
-      uploadMeta.textContent='Subiendo '+(index+1)+' de '+files.length+' · '+sizeMb.toFixed(1)+' MB';
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-      const r=await fetch('/api/jobs/upload-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName:f.name,contentType:f.type||'application/octet-stream',clientId:clientId()})});
-      if(!r.ok)throw new Error(await r.text());
-      const u=await r.json();
-      ids.push(u.jobId);
-      serverItems.push({id:u.jobId,name:f.name,status:'UPLOADING'});
-      latestBatchItems=[...serverItems];
-      if(userCancelledUpload){await fetch('/api/jobs/'+u.jobId+'/cancel',{method:'POST',headers:{'x-hydra-client-id':clientId()}});throw new Error('Subida cancelada')}
-      localStorage.setItem(BATCH_KEY,JSON.stringify(ids));
-      await uploadWithProgress(u.uploadUrl,u.headers,f);
-      if(userCancelledUpload)throw new Error('Subida cancelada');
-      const p=await fetch('/api/jobs/'+u.jobId+'/uploaded',{method:'POST'});
-      if(!p.ok)throw new Error(await p.text());
-      batchItems[index].status='UPLOADED';renderBatchQueue(batchItems);
-    }
-    uploadMeta.textContent=files.length>1?'Todos los videos están cargados · Hydra los procesará uno por uno':'Upload completo · iniciando procesamiento…';
-    await pollBatch(ids,serverItems);
-  }catch(e){fail(e.message||String(e))}
+  const total=files.reduce((sum,f)=>sum+f.size,0);
+  if(total>MAX_BATCH_BYTES){alert('El lote supera 1 GB.');input.value='';return}
+  const session={files:files.map(f=>({name:f.name,size:f.size,type:f.type||'application/octet-stream',id:null,stored:false}))};
+  saveUploadSession(session);
+  await processUploadSession(session,files);
 }
+resumeFileInput.addEventListener('change',()=>{
+  const session=readUploadSession();
+  if(!session)return;
+  const files=Array.from(resumeFileInput.files||[]);
+  if(files.length!==session.files.length ||
+    session.files.some((entry,i)=>files[i].name!==entry.name||files[i].size!==entry.size)){
+    alert('Selecciona los mismos archivos en el mismo orden para recuperar la subida.');
+    return;
+  }
+  void processUploadSession(session,files);
+});
+window.addEventListener('beforeunload',event=>{
+  if(!uploadInProgress)return;
+  event.preventDefault();event.returnValue='';
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&uploadInProgress){
+    setUploadNotice('Continúa con esta pantalla abierta hasta confirmar el lote. Si la conexión se interrumpió, podrás reanudar las partes pendientes.',false);
+  }
+});
 findMore.onclick=()=>void findMoreClips();
 again.onclick=()=>{input.value='';pickerDeliveredFile=false;err.hidden=true;localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);batchQueue.hidden=true;batchQueue.innerHTML='';void releaseScreen();setPickerBusy(false);show('home')};
 input.addEventListener('click',()=>{pickerOpenedAt=Date.now();pickerDeliveredFile=false;err.hidden=true});
@@ -584,15 +768,56 @@ if(!['COMPLETED','FAILED','CANCELLED'].includes(p.status)){
 }
 if(p.status==='COMPLETED'||p.status==='FAILED'||p.status==='CANCELLED'){const del=document.createElement('button');del.className='danger';del.title='Borrar proyecto y liberar almacenamiento';del.setAttribute('aria-label','Borrar proyecto');del.onclick=async()=>{if(!confirm('¿Eliminar este proyecto y sus archivos del almacenamiento? Esta acción no se puede deshacer.'))return;del.disabled=true;const dr=await fetch('/api/library/'+p.id,{method:'DELETE',headers:{'x-hydra-client-id':clientId()}});if(!dr.ok){del.disabled=false;let msg='No pudimos borrar el proyecto.';try{const body=await dr.json();if(body.message)msg=body.message}catch{}alert(msg);return}card.remove();if(!libraryGrid.children.length)libraryGrid.innerHTML='<div class="empty">No tienes proyectos guardados.</div>'};actions.append(del)}body.append(name,meta,actions);card.append(preview,body);libraryGrid.append(card)}}catch(e){libraryGrid.innerHTML='<div class="empty">'+friendlyError(e.message||e)+'</div>'}}
 async function resumeActiveJob(showProgress){
+  const remembered=readUploadSession();
   let ids=[];
   try{ids=JSON.parse(localStorage.getItem(BATCH_KEY)||'[]')}catch{ids=[]}
   if(!Array.isArray(ids)||!ids.length){
     const legacy=localStorage.getItem(JOB_KEY);
     if(legacy)ids=[legacy];
   }
+  if(!ids.length&&remembered){
+    if(showProgress)show('processing');
+    setUploadNotice('Tienes una subida pendiente. Vuelve a seleccionar los videos para continuar.',false);
+    resumeBox.hidden=false;
+    cancelProcessing.hidden=false;
+    latestBatchItems=[];
+    return true;
+  }
   if(!ids.length){if(showProgress)show('home');return false}
   const jobs=(await Promise.all(ids.map(fetchJob))).filter(Boolean);
+  if(!jobs.length&&remembered){
+    if(showProgress)show('processing');
+    setUploadNotice('La subida se interrumpió. Selecciona nuevamente los archivos para continuar.',false);
+    resumeBox.hidden=false;
+    cancelProcessing.hidden=false;
+    return true;
+  }
   if(!jobs.length){localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);if(showProgress)show('home');return false}
+  const savedUpload=readUploadSession();
+  if(savedUpload&&savedUpload.files.some(f=>!f.stored)){
+    setPickerBusy(false);
+    if(showProgress)show('processing');
+    setUploadNotice('La subida se interrumpió. Vuelve a seleccionar los videos para continuar las partes pendientes.',false);
+    resumeText.textContent='Vuelve a seleccionar los mismos videos en el mismo orden para continuar la subida.';
+    resumeBox.hidden=false;
+    cancelProcessing.hidden=false;
+    latestBatchItems=jobs.filter(j=>j.status==='UPLOADING').map(j=>({id:j.id,name:j.originalFileName,status:j.status}));
+    return true;
+  }
+  if(savedUpload&&savedUpload.files.length&&savedUpload.files.every(f=>f.stored)){
+    void processUploadSession(savedUpload,[]);
+    return true;
+  }
+  if(jobs.some(j=>j.status==='UPLOADING')){
+    setPickerBusy(false);
+    if(showProgress)show('processing');
+    setUploadNotice('La subida anterior quedó incompleta y no tiene sesión reanudable. Puedes cancelarla desde Mis clips y volver a subir.',false);
+    cancelProcessing.hidden=false;
+    latestBatchItems=jobs.filter(j=>j.status==='UPLOADING').map(j=>({id:j.id,name:j.originalFileName,status:j.status}));
+    uploadMeta.textContent='Archivo pendiente de completar';
+    return true;
+  }
+  setUploadNotice('Todos los archivos están en cola en el servidor. Ya puedes salir y volver después.',true);
   const terminal=jobs.every(j=>['COMPLETED','FAILED','CANCELLED'].includes(j.status));
   if(terminal){
     localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);
