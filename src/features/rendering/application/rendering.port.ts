@@ -35,6 +35,7 @@ export interface MagicEditPlan {
 }
 
 export interface RenderOptions {
+  signal?: AbortSignal;
   sourceWidth: number;
   sourceHeight: number;
   hook?: string;

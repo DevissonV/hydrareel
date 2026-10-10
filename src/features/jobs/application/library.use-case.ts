@@ -16,6 +16,7 @@ interface LibraryManifest {
   processingDurationMs?: number;
   metrics?: ProjectMetrics;
   clips: JobClip[];
+  editorialFeedback?: Record<string, { verdict: 'accepted' | 'rejected'; updatedAt: string }>;
 }
 
 function assertUuid(value: string | undefined, name: string): string {
@@ -57,7 +58,7 @@ export class LibraryUseCase {
 
     for (const job of states) {
       const updatedAt = job.updatedAt.getTime();
-      if (job.status === 'FAILED' && updatedAt < failedCutoff) {
+      if ((job.status === 'FAILED' || job.status === 'CANCELLED') && updatedAt < failedCutoff) {
         await this.purgeProject(clientId, job.id);
       } else if (job.status === 'UPLOADING' && updatedAt < uploadCutoff) {
         await this.purgeProject(clientId, job.id);
@@ -109,7 +110,10 @@ export class LibraryUseCase {
         completedAt: manifest?.completedAt,
         processingDurationMs: job.timings.totalDurationMs ?? manifest?.processingDurationMs,
         metrics: manifest?.metrics,
-        clips: job.clips.length ? job.clips : manifest?.clips ?? [],
+        clips: (job.clips.length ? job.clips : manifest?.clips ?? []).map((clip) => ({
+          ...clip,
+          feedback: manifest?.editorialFeedback?.[String(clip.index)]?.verdict ?? null,
+        })),
         error: job.error,
       });
     }
@@ -126,7 +130,10 @@ export class LibraryUseCase {
         completedAt: manifest.completedAt,
         processingDurationMs: manifest.processingDurationMs,
         metrics: manifest.metrics,
-        clips: manifest.clips,
+        clips: manifest.clips.map((clip) => ({
+          ...clip,
+          feedback: manifest.editorialFeedback?.[String(clip.index)]?.verdict ?? null,
+        })),
       });
     }
 
@@ -166,6 +173,8 @@ export class LibraryUseCase {
     let processingMs = 0;
     let processingSamples = 0;
     let clips = 0;
+    let feedbackAccepted = 0;
+    let feedbackRejected = 0;
     let transcriptCorrectionSaves = 0;
     let transcriptWordsCorrected = 0;
     let clipsUpdatedFromTranscript = 0;
@@ -178,6 +187,10 @@ export class LibraryUseCase {
       originalSeconds += Number(manifest.sourceDuration ?? 0);
       const currentClips = manifest.clips ?? [];
       clips += currentClips.length;
+      for (const entry of Object.values(manifest.editorialFeedback ?? {})) {
+        if (entry.verdict === 'accepted') feedbackAccepted += 1;
+        if (entry.verdict === 'rejected') feedbackRejected += 1;
+      }
       readySeconds += currentClips.reduce((sum, clip) => sum + Number(clip.durationSeconds || 0), 0);
       const m = normalizeProjectMetrics(manifest.metrics);
       const duration = Number(manifest.processingDurationMs ?? m.initialProcessingDurationMs ?? 0);
@@ -202,6 +215,11 @@ export class LibraryUseCase {
       projectsFailed: states.filter((job) => job.status === 'FAILED').length,
       originalSeconds: Number(originalSeconds.toFixed(3)),
       clipsGenerated: clips,
+      feedbackAccepted,
+      feedbackRejected,
+      feedbackAcceptanceRate: feedbackAccepted + feedbackRejected > 0
+        ? Number((feedbackAccepted / (feedbackAccepted + feedbackRejected)).toFixed(4))
+        : null,
       readySeconds: Number(readySeconds.toFixed(3)),
       averageProcessingSeconds: processingSamples
         ? Number((processingMs / processingSamples / 1000).toFixed(2))
@@ -220,6 +238,42 @@ export class LibraryUseCase {
         ? Number((regenerationDurationMs / (regenerationSucceeded + regenerationFailed) / 1000).toFixed(2))
         : 0,
     };
+  }
+
+  async feedback(
+    rawClientId: string | undefined,
+    rawJobId: string,
+    rawClipIndex: string,
+    verdict: unknown,
+  ) {
+    const clientId = assertUuid(rawClientId, 'clientId');
+    const jobId = assertUuid(rawJobId, 'jobId');
+    const clipIndex = Number(rawClipIndex);
+    if (!Number.isInteger(clipIndex) || clipIndex < 1) {
+      throw new BadRequestException('clipIndex inválido');
+    }
+    if (verdict !== 'accepted' && verdict !== 'rejected') {
+      throw new BadRequestException('verdict debe ser accepted o rejected');
+    }
+    const key = `clients/${clientId}/jobs/${jobId}.json`;
+    let manifest: LibraryManifest;
+    try {
+      manifest = await this.storage.getJson<LibraryManifest>(key);
+    } catch {
+      throw new NotFoundException('Proyecto no encontrado');
+    }
+    if (manifest.clientId !== clientId || manifest.id !== jobId) {
+      throw new NotFoundException('Proyecto no encontrado');
+    }
+    if (!manifest.clips.some((clip) => clip.index === clipIndex)) {
+      throw new NotFoundException('Clip no encontrado');
+    }
+    manifest.editorialFeedback = {
+      ...(manifest.editorialFeedback ?? {}),
+      [String(clipIndex)]: { verdict, updatedAt: new Date().toISOString() },
+    };
+    await this.storage.putJson(key, manifest);
+    return { clipIndex, verdict, saved: true };
   }
 
   async download(
@@ -303,7 +357,7 @@ export class LibraryUseCase {
       throw new NotFoundException('Proyecto no encontrado');
     }
 
-    if (job && !['COMPLETED', 'FAILED'].includes(job.status)) {
+    if (job && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) {
       throw new BadRequestException('Espera a que el proyecto termine antes de eliminarlo');
     }
 

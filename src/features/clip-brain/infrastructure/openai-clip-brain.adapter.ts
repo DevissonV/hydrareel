@@ -94,6 +94,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
         Authorization: `Bearer ${this.config.openaiApiKey}`,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(2 * 60 * 1000),
       body: JSON.stringify({
         model: this.config.openaiClipModel,
         reasoning: { effort: 'low' },
@@ -110,7 +111,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     return { parsed: JSON.parse(outputText(data)), usage: data.usage };
   }
 
-  async select(transcript: Transcript): Promise<ClipBrainResult> {
+  async select(transcript: Transcript, visualContext?: string): Promise<ClipBrainResult> {
     if (!this.config.openaiApiKey) throw new Error('OPENAI_API_KEY no está configurada');
 
     const policy = clipPolicyForDuration(
@@ -151,7 +152,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
     const { parsed, usage } = await this.structured(
       'hydrareel_clips',
       schema,
-      `Eres el editor principal de HydraReel y optimizas video corto para retención, comentarios y compartidos sin clickbait falso. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo.
+      `Eres el editor principal de HydraReel y optimizas video corto para retención, comentarios y compartidos sin clickbait falso. Selecciona entre 1 y ${policy.maxClips} momentos realmente valiosos; nunca rellenes una cuota. Cada clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos. Debe entenderse sin contexto previo, comenzar en una idea natural y terminar después de que la idea, historia o payoff haya cerrado. Usa únicamente timestamps reales de la línea de tiempo. Si hay contexto visual, úsalo solo como evidencia suplementaria para valorar acciones o reacciones; nunca inventes eventos ni deduzcas una escena a partir de una sola imagen.
 
 Prioriza momentos con una de estas fuerzas: sorpresa real, contraste, humor, opinión fuerte, tensión, transformación, dato inesperado, identidad aspiracional o payoff claro. Para el score 0-100 evalúa: hook inmediato 30 puntos, potencial de retención 25, payoff 20, potencial de comentario/compartido 15 y claridad sin contexto 10. No es una probabilidad de viralidad.
 
@@ -169,7 +170,7 @@ Packaging social-native:
 - Devuelve emphasisTerms con 0-6 palabras o frases cortas que carguen significado: conceptos centrales, cifras, nombres, contraste o payoff. No resaltes conectores, muletillas ni palabras comunes solo por animar. Si nada merece énfasis, devuelve [].
 
 La meta no es sonar "viral" de forma artificial: debe sentirse como un post nativo de TikTok/Reels, escrito por una persona que entiende el clip.`,
-      { duration: transcript.duration, policy, timeline },
+      { duration: transcript.duration, policy, timeline, visualContext: visualContext ?? null },
     );
 
     const clips = validateAndNormalizeCandidates(
@@ -202,11 +203,11 @@ La meta no es sonar "viral" de forma artificial: debe sentirse como un post nati
       end: Number(clip.endSeconds.toFixed(2)),
       title: clip.title,
     }));
-    const overlapsUsedRange = (start: number, end: number) =>
-      usedRanges.some((range) => Math.max(start, range.start) < Math.min(end, range.end));
-    const timeline = transcript.segments
-      .map((s, index) => ({ index, start: s.start, end: s.end, text: s.text }))
-      .filter((segment) => !overlapsUsedRange(segment.start, segment.end));
+    // Keep context around previously used ranges. Removing overlapping transcript
+    // segments can erase the setup or payoff of an otherwise distinct moment.
+    const timeline = transcript.segments.map((s, index) => ({
+      index, start: s.start, end: s.end, text: s.text,
+    }));
     const schema = {
       type: 'object',
       additionalProperties: false,
@@ -241,7 +242,7 @@ La meta no es sonar "viral" de forma artificial: debe sentirse como un post nati
       schema,
       `Eres un editor senior buscando oportunidades que una primera pasada pudo dejar fuera. Encuentra hasta ${requested} clips ADICIONALES que sean realmente publicables y diferentes de los ya usados. No rellenes cuota: si no hay más momentos fuertes devuelve clips:[]. Cada nuevo clip debe durar entre ${policy.minSeconds} y ${policy.maxSeconds} segundos, entenderse sin contexto y cerrar su idea/payoff.
 
-Regla crítica de no repetición: no reutilices el mismo momento, argumento o payoff de los rangos ya usados. La línea de tiempo recibida ya excluye segmentos cubiertos por clips existentes; trabaja únicamente con esos segmentos restantes. Prefiere otra historia, respuesta, broma, dato, tensión, reacción, opinión o transformación.
+Regla crítica de no repetición: no reutilices el mismo momento, argumento o payoff de los rangos ya usados. Puedes consultar toda la línea de tiempo para preservar contexto narrativo, pero los clips propuestos deben ser diferentes. Los rangos existentes son material de exclusión, no nuevos candidatos. Prefiere otra historia, respuesta, broma, dato, tensión, reacción, opinión o transformación.
 
 Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socialCaption breve que agregue algo; exactamente 5 hashtags con #viral y #fyp más 3 relevantes; sin tono periodístico salvo que corresponda; sin clickbait falso. El score evalúa hook, retención, payoff, conversación y claridad.`,
       { duration: transcript.duration, policy, usedRanges, timeline },
@@ -311,61 +312,68 @@ Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socia
       const result = await this.structured(
         'hydrareel_editorial_qa',
         schema,
-        `Eres el control editorial final de HydraReel. Antes de renderizar, revisa cada candidato como si fueras un editor humano exigente. Un clip se aprueba cuando se entiende solo, empieza de forma natural, termina después de cerrar la frase/idea/payoff y puede mejorarse usando únicamente límites reales de segmentos. Puedes mover inicio y final dentro de ${policy.minSeconds}-${policy.maxSeconds}s. Si no puedes MEJORAR con seguridad un candidato, approved=false: Hydra conservará el corte original válido en vez de perderlo. Mantén title <=80 caracteres y reason <=220. Devuelve una entrada por cada candidato.`,
+        `Eres el control editorial final de HydraReel. Evalúa si cada candidato realmente merece publicarse: claridad sin contexto, gancho fiel en los primeros segundos, cierre completo, ausencia de relleno y valor genuino para una audiencia. approved=false significa que NO es publicable, no simplemente que no se puede mejorar. approved=true puede mantener los límites originales cuando ya son correctos. Ajusta los límites solo si mejoran el corte sin eliminar premisas o remates. Usa índices reales de segmentos y límites entre ${policy.minSeconds}-${policy.maxSeconds}s. No apruebes por cumplir una cuota. Mantén title <=80 caracteres y reason <=220. Devuelve una entrada por cada candidato.`,
         { duration: transcript.duration, policy, candidates: clips, timeline },
       );
       parsed = result.parsed;
       usage = result.usage;
-    } catch {
-      return {
-        clips,
-        usage: { fallback: 'all_original_candidates', reason: 'editorial_qa_unavailable' },
-      };
+    } catch (error) {
+      // An unavailable reviewer is not an editorial approval: preserve the source
+      // and cached transcript for a later retry instead of publishing unreviewed clips.
+      throw new Error('Control de calidad editorial no disponible; reintenta el procesamiento', {
+        cause: error,
+      });
     }
 
-    const reviewedByIndex = new Map<number, ClipCandidate>();
+    const approved: ClipCandidate[] = [];
+    const seen = new Set<number>();
+    let rejected = 0;
+    let adjusted = 0;
+    let keptOriginal = 0;
     for (const item of parsed.clips ?? []) {
-      const original = clips[item.candidateIndex];
-      if (!original || !item.approved) continue;
+      const index = Number(item.candidateIndex);
+      if (!Number.isInteger(index) || seen.has(index) || !clips[index]) continue;
+      seen.add(index);
+      if (item.approved !== true) {
+        rejected += 1;
+        continue;
+      }
+      const original = clips[index];
       const bounds = wordSafeBounds(transcript, item.startSegmentIndex, item.endSegmentIndex);
-      if (!bounds) continue;
-
-      const revised = validateAndNormalizeCandidates(
+      const proposal = bounds ? validateAndNormalizeCandidates(
         { clips: [{
+          ...original,
           startSeconds: bounds.startSeconds,
           endSeconds: bounds.endSeconds,
           title: String(item.title || original.title),
-          hook: original.hook,
           reason: String(item.reason || original.reason),
-          socialCaption: original.socialCaption,
-          hashtags: original.hashtags,
-          emphasisTerms: original.emphasisTerms,
           score: Number(item.score ?? original.score),
         }] },
-        policy.minSeconds,
-        policy.maxSeconds,
-        transcript.duration,
-        1,
-      );
-
-      if (revised[0]) reviewedByIndex.set(item.candidateIndex, revised[0]);
+        policy.minSeconds, policy.maxSeconds, transcript.duration, 1,
+      )[0] : undefined;
+      if (proposal) {
+        approved.push(proposal);
+        adjusted += 1;
+      } else {
+        // A positive editorial approval is distinct from the ability to adjust timing.
+        approved.push(original);
+        keptOriginal += 1;
+      }
     }
-
-    const merged = clips.map((original, index) => reviewedByIndex.get(index) ?? original);
+    // Missing decisions are not approvals; never silently convert them to publishable clips.
+    rejected += Math.max(0, clips.length - seen.size);
     const normalized = validateAndNormalizeCandidates(
-      { clips: merged },
-      policy.minSeconds,
-      policy.maxSeconds,
-      transcript.duration,
-      policy.maxClips,
+      { clips: approved }, policy.minSeconds, policy.maxSeconds,
+      transcript.duration, policy.maxClips,
     );
-
     return {
-      clips: normalized.length ? normalized : clips,
+      clips: normalized,
       usage: {
         editorialReview: usage,
-        improved: reviewedByIndex.size,
-        preservedOriginals: Math.max(0, clips.length - reviewedByIndex.size),
+        approved: normalized.length,
+        rejected,
+        adjusted,
+        keptOriginal,
       },
     };
   }

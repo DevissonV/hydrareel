@@ -19,9 +19,9 @@ import {
   shouldRenderCue,
 } from '../domain/composition';
 
-function run(command: string, args: string[]): Promise<void> {
+function run(command: string, args: string[], signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'], signal });
     let stderr = '';
     child.stderr.on('data', (chunk) => { stderr += String(chunk); });
     child.once('error', reject);
@@ -479,6 +479,6 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
     clip: ClipCandidate,
     options: RenderOptions,
   ): Promise<void> {
-    await run('ffmpeg', buildRenderArgs(source, destination, subtitlesPath, clip, options));
+    await run('ffmpeg', buildRenderArgs(source, destination, subtitlesPath, clip, options), options.signal);
   }
 }

@@ -81,6 +81,16 @@ export class LibraryController {
     return this.transcriptCorrection.updateClip(clientId, jobId, clipIndex, body.text);
   }
 
+  @Put(':jobId/clips/:clipIndex/feedback')
+  rateClip(
+    @Headers('x-hydra-client-id') clientId: string | undefined,
+    @Param('jobId') jobId: string,
+    @Param('clipIndex') clipIndex: string,
+    @Body() body: { verdict?: unknown },
+  ) {
+    return this.library.feedback(clientId, jobId, clipIndex, body?.verdict);
+  }
+
   @Post(':jobId/find-more')
   findMoreClips(
     @Headers('x-hydra-client-id') clientId: string | undefined,
