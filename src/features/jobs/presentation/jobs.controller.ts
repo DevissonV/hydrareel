@@ -24,6 +24,11 @@ export class JobsController {
     return this.uploads.status(id, clientId);
   }
 
+  @Post(':id/single-url')
+  singleUrl(@Param('id') id: string, @Headers('x-hydra-client-id') clientId?: string) {
+    return this.uploads.singleUrl(id, clientId);
+  }
+
   @Post(':id/part-url')
   partUrl(@Param('id') id: string, @Headers('x-hydra-client-id') clientId: string | undefined,
     @Body() body: { partNumber?: number }) {
