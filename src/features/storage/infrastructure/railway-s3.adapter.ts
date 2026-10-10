@@ -3,6 +3,12 @@ import { createWriteStream, createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
+  HeadObjectCommand,
+  ListPartsCommand,
+  UploadPartCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   ListObjectsV2Command,
@@ -11,7 +17,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { CONFIG, HydraConfig } from '../../../config';
-import { ObjectStoragePort } from '../application/object-storage.port';
+import { ObjectStoragePort, UploadedPart } from '../application/object-storage.port';
 
 @Injectable()
 export class RailwayS3Adapter implements ObjectStoragePort {
@@ -27,6 +33,65 @@ export class RailwayS3Adapter implements ObjectStoragePort {
         secretAccessKey: config.bucketSecretAccessKey,
       },
     });
+  }
+
+  async beginMultipart(key: string, contentType: string): Promise<string> {
+    const result = await this.s3.send(new CreateMultipartUploadCommand({
+      Bucket: this.config.bucketName, Key: key, ContentType: contentType,
+    }));
+    if (!result.UploadId) throw new Error('No se pudo iniciar la carga multipart');
+    return result.UploadId;
+  }
+
+  async multipartPartUrl(key: string, uploadId: string, partNumber: number): Promise<string> {
+    return getSignedUrl(this.s3, new UploadPartCommand({
+      Bucket: this.config.bucketName, Key: key, UploadId: uploadId, PartNumber: partNumber,
+    }), { expiresIn: 900 });
+  }
+
+  async listMultipartParts(key: string, uploadId: string): Promise<UploadedPart[]> {
+    const parts: UploadedPart[] = [];
+    let marker: string | undefined;
+    for (;;) {
+      const result = await this.s3.send(new ListPartsCommand({
+        Bucket: this.config.bucketName, Key: key, UploadId: uploadId,
+        PartNumberMarker: marker,
+      }));
+      for (const part of result.Parts ?? []) {
+        if (part.PartNumber && part.ETag && part.Size !== undefined) {
+          parts.push({ partNumber: part.PartNumber, etag: part.ETag, size: part.Size });
+        }
+      }
+      if (!result.IsTruncated || !result.NextPartNumberMarker) break;
+      marker = String(result.NextPartNumberMarker);
+    }
+    return parts.sort((a,b)=>a.partNumber-b.partNumber);
+  }
+
+  async completeMultipart(key: string, uploadId: string, parts: UploadedPart[]): Promise<void> {
+    await this.s3.send(new CompleteMultipartUploadCommand({
+      Bucket: this.config.bucketName, Key: key, UploadId: uploadId,
+      MultipartUpload: { Parts: parts.map(p => ({ PartNumber: p.partNumber, ETag: p.etag })) },
+    }));
+  }
+
+  async abortMultipart(key: string, uploadId: string): Promise<void> {
+    await this.s3.send(new AbortMultipartUploadCommand({
+      Bucket: this.config.bucketName, Key: key, UploadId: uploadId,
+    }));
+  }
+
+  async objectSize(key: string): Promise<number | null> {
+    try {
+      const result = await this.s3.send(new HeadObjectCommand({
+        Bucket: this.config.bucketName, Key: key,
+      }));
+      return typeof result.ContentLength === 'number' ? result.ContentLength : null;
+    } catch (error) {
+      const e = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (e.name === 'NotFound' || e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    }
   }
 
   async createUploadUrl(key: string, contentType: string): Promise<string> {
