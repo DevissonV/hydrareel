@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post } from '@nestjs/common';
 import { CreateUploadUseCase } from '../application/create-upload.use-case';
 import { ProcessJobUseCase } from '../application/process-job.use-case';
 import { GetJobUseCase } from '../application/get-job.use-case';
@@ -22,6 +22,14 @@ export class JobsController {
   async uploaded(@Param('id') id: string) {
     await this.processJob.markUploadedAndStart(id);
     return { accepted: true, jobId: id };
+  }
+
+  @Post(':id/cancel')
+  async cancel(
+    @Param('id') id: string,
+    @Headers('x-hydra-client-id') clientId: string | undefined,
+  ) {
+    return this.processJob.cancel(id, clientId);
   }
 
   @Get(':id')
