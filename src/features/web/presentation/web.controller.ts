@@ -757,14 +757,30 @@ if(!['COMPLETED','FAILED','CANCELLED'].includes(p.status)){
 }
 if(p.status==='COMPLETED'||p.status==='FAILED'||p.status==='CANCELLED'){const del=document.createElement('button');del.className='danger';del.title='Borrar proyecto y liberar almacenamiento';del.setAttribute('aria-label','Borrar proyecto');del.onclick=async()=>{if(!confirm('¿Eliminar este proyecto y sus archivos del almacenamiento? Esta acción no se puede deshacer.'))return;del.disabled=true;const dr=await fetch('/api/library/'+p.id,{method:'DELETE',headers:{'x-hydra-client-id':clientId()}});if(!dr.ok){del.disabled=false;let msg='No pudimos borrar el proyecto.';try{const body=await dr.json();if(body.message)msg=body.message}catch{}alert(msg);return}card.remove();if(!libraryGrid.children.length)libraryGrid.innerHTML='<div class="empty">No tienes proyectos guardados.</div>'};actions.append(del)}body.append(name,meta,actions);card.append(preview,body);libraryGrid.append(card)}}catch(e){libraryGrid.innerHTML='<div class="empty">'+friendlyError(e.message||e)+'</div>'}}
 async function resumeActiveJob(showProgress){
+  const remembered=readUploadSession();
   let ids=[];
   try{ids=JSON.parse(localStorage.getItem(BATCH_KEY)||'[]')}catch{ids=[]}
   if(!Array.isArray(ids)||!ids.length){
     const legacy=localStorage.getItem(JOB_KEY);
     if(legacy)ids=[legacy];
   }
+  if(!ids.length&&remembered){
+    if(showProgress)show('processing');
+    setUploadNotice('Tienes una subida pendiente. Vuelve a seleccionar los videos para continuar.',false);
+    resumeBox.hidden=false;
+    cancelProcessing.hidden=false;
+    latestBatchItems=[];
+    return true;
+  }
   if(!ids.length){if(showProgress)show('home');return false}
   const jobs=(await Promise.all(ids.map(fetchJob))).filter(Boolean);
+  if(!jobs.length&&remembered){
+    if(showProgress)show('processing');
+    setUploadNotice('La subida se interrumpió. Selecciona nuevamente los archivos para continuar.',false);
+    resumeBox.hidden=false;
+    cancelProcessing.hidden=false;
+    return true;
+  }
   if(!jobs.length){localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);if(showProgress)show('home');return false}
   const savedUpload=readUploadSession();
   if(savedUpload&&savedUpload.files.some(f=>!f.stored)){
