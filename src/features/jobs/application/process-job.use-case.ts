@@ -21,6 +21,7 @@ import { inspectVisualContext } from '../../clip-brain/application/visual-contex
 export class ProcessJobUseCase implements OnModuleInit {
   private runningJobId?: string;
   private queueDraining = false;
+  private readonly activeRenderControllers = new Map<string, AbortController>();
 
   constructor(
     @Inject(CONFIG) private readonly config: HydraConfig,
@@ -69,6 +70,7 @@ export class ProcessJobUseCase implements OnModuleInit {
       throw new BadRequestException('El proyecto ya terminó');
     }
     job.transition('CANCELLED');
+    this.activeRenderControllers.get(job.id)?.abort();
     await this.jobs.save(job);
     jobLog(job.id, 'cancellation_requested', { jobId });
     return { status: 'CANCELLED' };
@@ -198,7 +200,10 @@ export class ProcessJobUseCase implements OnModuleInit {
       await this.jobs.save(job);
       const r0 = Date.now();
       const releaseRender = await this.renderGate.acquire(`job:${job.id}`);
+      const renderController = new AbortController();
+      this.activeRenderControllers.set(job.id, renderController);
       try {
+      this.ensureNotCancelled(job);
       for (const [index, clip] of reviewed.clips.slice(0, this.config.maxClipsPerJob).entries()) {
       this.ensureNotCancelled(job);
         const number = String(index + 1).padStart(2, '0');
@@ -220,6 +225,7 @@ export class ProcessJobUseCase implements OnModuleInit {
           captionStyle,
           platform: 'tiktok',
           plan,
+          signal: renderController.signal,
         });
         const outputMeta = await this.media.probe(outputPath);
         if (outputMeta.width !== 1080 || outputMeta.height !== 1920) throw new Error(`Clip ${number} no es 1080x1920`);
@@ -276,6 +282,7 @@ export class ProcessJobUseCase implements OnModuleInit {
         });
       }
       } finally {
+        this.activeRenderControllers.delete(job.id);
         releaseRender();
       }
       job.timings.renderDurationMs = Date.now() - r0;
