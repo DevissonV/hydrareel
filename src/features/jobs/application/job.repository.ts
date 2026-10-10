@@ -11,6 +11,7 @@ export interface JobRepository {
   countActive(): Promise<number>;
   listActive(): Promise<Job[]>;
   listByClient(clientId: string): Promise<Job[]>;
+  listStaleUploads(cutoff: Date): Promise<Job[]>;
   remove(id: string): Promise<void>;
 }
 
@@ -49,6 +50,11 @@ export class DurableJobRepository implements JobRepository {
 
   async countActive(): Promise<number> {
     return (await this.listActive()).length;
+  }
+
+  async listStaleUploads(cutoff: Date): Promise<Job[]> {
+    return (await this.listAll()).filter(job=>
+      job.status === 'UPLOADING' && job.updatedAt.getTime() < cutoff.getTime());
   }
 
   async listByClient(clientId: string): Promise<Job[]> {
