@@ -52,6 +52,15 @@ export class UploadSessionUseCase {
       parts: parts.map(p=>({ partNumber:p.partNumber, size:p.size })) };
   }
 
+  async singleUrl(jobId: string, clientId: string | undefined) {
+    const job = await this.owned(jobId, clientId);
+    if (job.status !== 'UPLOADING' || job.upload?.uploadId) throw new BadRequestException('El trabajo no admite subida simple');
+    return {
+      url: await this.storage.createUploadUrl(job.sourceKey, job.contentType),
+      headers: { 'Content-Type': job.contentType },
+    };
+  }
+
   async partUrl(jobId: string, clientId: string | undefined, partNumber: number) {
     const job = await this.owned(jobId, clientId);
     const upload = job.upload;
