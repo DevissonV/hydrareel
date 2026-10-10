@@ -72,12 +72,46 @@ export class ProcessJobUseCase implements OnModuleInit {
     job.transition('CANCELLED');
     this.activeRenderControllers.get(job.id)?.abort();
     await this.jobs.save(job);
+    if (job.upload?.uploadId) {
+      await this.storage.abortMultipart(job.sourceKey, job.upload.uploadId).catch(error => {
+        jobLog(job.id, 'multipart_abort_failed', { error: String(error) });
+      });
+    }
     jobLog(job.id, 'cancellation_requested', { jobId });
     return { status: 'CANCELLED' };
   }
 
   private ensureNotCancelled(job: { status: string }): void {
     if (job.status === 'CANCELLED') throw new Error('HYDRA_JOB_CANCELLED');
+  }
+
+  async queueBatch(jobIds: string[], clientId: string | undefined): Promise<{ accepted: boolean; jobIds: string[] }> {
+    if (!clientId || !Array.isArray(jobIds) || !jobIds.length || jobIds.length > 3 ||
+      new Set(jobIds).size !== jobIds.length) throw new BadRequestException('Lote inválido');
+    const jobs = await Promise.all(jobIds.map(id=>this.jobs.get(id)));
+    if (jobs.some(job=>!job || job.clientId !== clientId)) throw new NotFoundException('Proyecto no encontrado');
+    for (const job of jobs) {
+      if (!job) continue;
+      if (job.status !== 'UPLOADING' && job.status !== 'UPLOADED' &&
+          job.status !== 'TRANSCRIBING' && job.status !== 'ANALYZING' &&
+          job.status !== 'RENDERING' && job.status !== 'COMPLETED') {
+        throw new BadRequestException('Un trabajo está cancelado o fallido');
+      }
+      // Validate the WHOLE batch before changing any state or starting any compute.
+      if (job.status === 'UPLOADING') {
+        const size = await this.storage.objectSize(job.sourceKey);
+        if (!size || (job.upload?.sizeBytes && size !== job.upload.sizeBytes)) {
+          throw new BadRequestException('Uno de los videos aún no terminó de subir');
+        }
+      }
+    }
+    for (const job of jobs) {
+      if (!job || job.status !== 'UPLOADING') continue;
+      job.transition('UPLOADED');
+      await this.jobs.save(job);
+    }
+    this.kickQueue();
+    return { accepted: true, jobIds };
   }
 
   async markUploadedAndStart(jobId: string): Promise<void> {
