@@ -620,7 +620,7 @@ async function processUploadSession(session,chosenFiles){
       if(userCancelledUpload)throw new Error('Subida cancelada');
       if(entry.stored)continue;
       const file=selected[i];
-      if(!file||file.name!==entry.name||file.size!==entry.size){
+      if(!entry.id&&(!file||file.name!==entry.name||file.size!==entry.size)){
         throw new Error('Vuelve a seleccionar los mismos videos para continuar: '+entry.name);
       }
       if(!entry.id){
@@ -637,11 +637,17 @@ async function processUploadSession(session,chosenFiles){
         latestBatchItems=session.files.filter(f=>f.id).map(f=>({id:f.id,name:f.name,status:f.stored?'STORED':'UPLOADING'}));
       }
       const status=await uploadApi('/api/jobs/'+entry.id+'/upload-status','GET');
+      if(status.status!=='UPLOADING'&&status.status!=='UPLOADED'){
+        throw new Error('Este proyecto ya no acepta archivos. Cancélalo y comienza uno nuevo.');
+      }
       if(status.complete){
         entry.stored=true;
         saveUploadSession(session);
         updateBatchUploadProgress(session,i,entry.size);
         continue;
+      }
+      if(!file||file.name!==entry.name||file.size!==entry.size){
+        throw new Error('Selecciona el mismo archivo para continuar: '+entry.name);
       }
       if(status.mode==='multipart'){
         const partSize=status.partSize||entry.partSize;
@@ -731,6 +737,11 @@ resumeFileInput.addEventListener('change',()=>{
 window.addEventListener('beforeunload',event=>{
   if(!uploadInProgress)return;
   event.preventDefault();event.returnValue='';
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&uploadInProgress){
+    setUploadNotice('Continúa con esta pantalla abierta hasta confirmar el lote. Si la conexión se interrumpió, podrás reanudar las partes pendientes.',false);
+  }
 });
 findMore.onclick=()=>void findMoreClips();
 again.onclick=()=>{input.value='';pickerDeliveredFile=false;err.hidden=true;localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);batchQueue.hidden=true;batchQueue.innerHTML='';void releaseScreen();setPickerBusy(false);show('home')};
