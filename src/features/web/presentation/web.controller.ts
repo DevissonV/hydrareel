@@ -106,6 +106,14 @@ const html = String.raw`<!doctype html>
           <div class="upload-meta" id="uploadMeta">Preparando archivo…</div>
         </div>
         <div id="batchQueue" class="batch-queue" hidden></div>
+        <div id="uploadNotice" role="status" aria-live="polite" style="margin:16px auto;padding:14px 16px;border:1px solid #a779ee66;border-radius:14px;background:#3f2b6d36;font-weight:700;line-height:1.5;max-width:610px">⚠ Mantén esta pantalla abierta mientras subimos los archivos.</div>
+        <div id="resumeBox" hidden style="margin:14px auto;padding:14px;border:1px solid #7283ab77;border-radius:14px;max-width:610px">
+          <p id="resumeText" style="margin:0 0 12px">La subida quedó pausada. Puedes continuar las partes que faltan.</p>
+          <label class="secondary" style="display:inline-block;cursor:pointer;padding:12px;border-radius:10px">
+            ↻ Seleccionar archivos para continuar
+            <input id="resumeFileInput" type="file" accept=".mp4,.mov,.webm,video/*" multiple style="display:none"/>
+          </label>
+        </div>
         <button id="cancelProcessing" type="button" class="secondary" style="margin:16px auto;display:block">✕ Cancelar procesamiento</button>
         <div class="steps">
           <div class="step" data-state="UPLOADING"><span class="dot">1</span><span><b>Preparando video</b><small>Subiendo el original de forma segura</small></span><span></span></div>
