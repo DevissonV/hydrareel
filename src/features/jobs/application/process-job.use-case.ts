@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -60,6 +60,24 @@ export class ProcessJobUseCase implements OnModuleInit {
     this.kickQueue();
   }
 
+  async cancel(jobId: string, clientId: string | undefined): Promise<{ status: string }> {
+    if (!clientId) throw new BadRequestException('Identificador de cliente requerido');
+    const job = await this.jobs.get(jobId);
+    if (!job || job.clientId !== clientId) throw new NotFoundException('Proyecto no encontrado');
+    if (job.status === 'CANCELLED') return { status: 'CANCELLED' };
+    if (job.status === 'COMPLETED' || job.status === 'FAILED') {
+      throw new BadRequestException('El proyecto ya terminó');
+    }
+    job.transition('CANCELLED');
+    await this.jobs.save(job);
+    jobLog(job.id, 'cancellation_requested', { jobId });
+    return { status: 'CANCELLED' };
+  }
+
+  private ensureNotCancelled(job: { status: string }): void {
+    if (job.status === 'CANCELLED') throw new Error('HYDRA_JOB_CANCELLED');
+  }
+
   async markUploadedAndStart(jobId: string): Promise<void> {
     const job = await this.jobs.get(jobId);
     if (!job) throw new NotFoundException('Job no encontrado');
@@ -107,6 +125,7 @@ export class ProcessJobUseCase implements OnModuleInit {
     const sourcePath = path.join(dir, `source.${job.sourceKey.split('.').pop() ?? 'mp4'}`);
     const audioPath = path.join(dir, 'audio.mp3');
     try {
+      this.ensureNotCancelled(job);
       await mkdir(dir, { recursive: true });
       jobLog(job.id, 'processing_started');
       await this.storage.downloadToFile(job.sourceKey, sourcePath);
@@ -117,6 +136,7 @@ export class ProcessJobUseCase implements OnModuleInit {
       job.sourceDuration = sourceMeta.durationSeconds;
       jobLog(job.id, 'source_validated', { sourceDuration: sourceMeta.durationSeconds, resolution: `${sourceMeta.width}x${sourceMeta.height}`, codec: sourceMeta.videoCodec, audioCodec: sourceMeta.audioCodec });
 
+      this.ensureNotCancelled(job);
       job.transition('TRANSCRIBING');
       await this.jobs.save(job);
       const t0 = Date.now();
@@ -156,6 +176,7 @@ export class ProcessJobUseCase implements OnModuleInit {
       job.usage.transcription = transcriptReused ? { reused: true, previous: transcript.usage } : transcript.usage;
       jobLog(job.id, transcriptReused ? 'transcription_reused' : 'transcription_completed', { transcriptionDurationMs: job.timings.transcriptionDurationMs, words: transcript.words.length, segments: transcript.segments.length, model: transcript.model });
 
+      this.ensureNotCancelled(job);
       job.transition('ANALYZING');
       await this.jobs.save(job);
       const a0 = Date.now();
@@ -172,12 +193,14 @@ export class ProcessJobUseCase implements OnModuleInit {
         model: this.config.openaiClipModel,
       });
 
+      this.ensureNotCancelled(job);
       job.transition('RENDERING');
       await this.jobs.save(job);
       const r0 = Date.now();
       const releaseRender = await this.renderGate.acquire(`job:${job.id}`);
       try {
       for (const [index, clip] of reviewed.clips.slice(0, this.config.maxClipsPerJob).entries()) {
+      this.ensureNotCancelled(job);
         const number = String(index + 1).padStart(2, '0');
         const subtitlesPath = path.join(dir, `clip-${number}.ass`);
         const outputPath = path.join(dir, `clip-${number}.mp4`);
@@ -203,7 +226,8 @@ export class ProcessJobUseCase implements OnModuleInit {
         if (outputMeta.videoCodec !== 'h264') throw new Error(`Clip ${number} no es H.264`);
         if (!outputMeta.hasAudio || outputMeta.audioCodec !== 'aac') throw new Error(`Clip ${number} no tiene AAC`);
         const key = `outputs/${job.id}/clip-${number}.mp4`;
-        await this.storage.uploadFile(key, outputPath, 'video/mp4');
+        this.ensureNotCancelled(job);
+      await this.storage.uploadFile(key, outputPath, 'video/mp4');
         job.clips.push({
           index: index + 1,
           key,
@@ -275,6 +299,7 @@ export class ProcessJobUseCase implements OnModuleInit {
         metrics,
         clips: job.clips,
       });
+      this.ensureNotCancelled(job);
       job.transition('COMPLETED');
       await this.jobs.save(job);
       jobLog(job.id, 'job_completed', {
@@ -293,6 +318,10 @@ export class ProcessJobUseCase implements OnModuleInit {
             ? 'No pudimos completar esta edición. Intenta de nuevo con el mismo video.'
             : rawMessage;
       job.timings.totalDurationMs = Date.now() - started;
+      if (job.status === 'CANCELLED') {
+        jobLog(job.id, 'job_cancelled', { jobId });
+        return;
+      }
       job.fail(job.status, publicMessage);
       await this.jobs.save(job);
       jobLog(job.id, 'job_failed', {
