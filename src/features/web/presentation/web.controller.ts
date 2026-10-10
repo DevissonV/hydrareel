@@ -106,6 +106,7 @@ const html = String.raw`<!doctype html>
           <div class="upload-meta" id="uploadMeta">Preparando archivo…</div>
         </div>
         <div id="batchQueue" class="batch-queue" hidden></div>
+        <button id="cancelProcessing" type="button" class="secondary" style="margin:16px auto;display:block">✕ Cancelar procesamiento</button>
         <div class="steps">
           <div class="step" data-state="UPLOADING"><span class="dot">1</span><span><b>Preparando video</b><small>Subiendo el original de forma segura</small></span><span></span></div>
           <div class="step" data-state="TRANSCRIBING"><span class="dot">2</span><span><b>Entendiendo contenido</b><small>Detectando ideas, contexto y momentos importantes</small></span><span></span></div>
@@ -448,7 +449,7 @@ function queueStateLabel(status){
   if(status==='ANALYZING')return 'Analizando';
   if(status==='RENDERING')return 'Editando';
   if(status==='COMPLETED')return '✓ Listo';
-  if(status==='FAILED')return 'Error';
+  if(status==='FAILED')return 'Error';if(status==='CANCELLED')return 'Cancelado';
   return 'Pendiente';
 }
 function renderBatchQueue(items){
@@ -469,6 +470,21 @@ function renderBatchQueue(items){
 async function fetchJob(id){
   try{const r=await fetch('/api/jobs/'+id);if(!r.ok)return null;return await r.json()}catch{return null}
 }
+const cancelProcessing=document.getElementById('cancelProcessing');
+let latestBatchItems=[];
+cancelProcessing.onclick=async()=>{
+  const active=latestBatchItems.filter(x=>x.id&&!['COMPLETED','FAILED','CANCELLED'].includes(x.status));
+  if(!active.length)return;
+  if(!confirm('¿Cancelar los '+active.length+' trabajos pendientes? Los originales se conservan.'))return;
+  cancelProcessing.disabled=true;cancelProcessing.textContent='Cancelando…';
+  try{
+    const responses=await Promise.all(active.map(item=>fetch('/api/jobs/'+encodeURIComponent(item.id)+'/cancel',{
+      method:'POST',headers:{'x-hydra-client-id':clientId()}
+    })));
+    if(responses.some(r=>!r.ok))throw new Error('Algunos trabajos no pudieron cancelarse');
+    cancelProcessing.textContent='✓ Cancelación solicitada';
+  }catch(e){alert(e.message||'No pudimos cancelar');cancelProcessing.disabled=false;cancelProcessing.textContent='✕ Cancelar procesamiento'}
+};
 async function pollBatch(ids,initialItems=[]){
   const names=new Map(initialItems.map(item=>[item.id,item.name]));
   for(;;){
@@ -478,14 +494,17 @@ async function pollBatch(ids,initialItems=[]){
       const job=jobs.find(j=>j.id===id);
       return job?{...job,name:names.get(id)||job.originalFileName}:{id,name:names.get(id)||('Video '+(index+1)),status:'UPLOADED'};
     });
+    latestBatchItems=items;
+    cancelProcessing.hidden=!items.some(x=>x.id&&!['COMPLETED','FAILED','CANCELLED'].includes(x.status));
+    if(!cancelProcessing.hidden){cancelProcessing.disabled=false;cancelProcessing.textContent='✕ Cancelar procesamiento'}
     renderBatchQueue(items);
-    const current=items.find(item=>!['COMPLETED','FAILED','UPLOADED'].includes(item.status))||items.find(item=>item.status==='UPLOADED');
+    const current=items.find(item=>!['COMPLETED','FAILED','CANCELLED','UPLOADED'].includes(item.status))||items.find(item=>item.status==='UPLOADED');
     if(current){
       filenameEl.textContent=current.name||current.originalFileName||'Video en proceso';
       setProgress(current.status);
       uploadMeta.textContent=current.status==='UPLOADED'?'En cola · Hydra lo procesará automáticamente':current.status==='TRANSCRIBING'?'Entendiendo todo lo que se dice…':current.status==='ANALYZING'?'Eligiendo momentos que funcionan por sí solos…':current.status==='RENDERING'?'Aplicando Magic Edit…':'Procesando…';
     }
-    const terminal=items.every(item=>item.status==='COMPLETED'||item.status==='FAILED');
+    const terminal=items.every(item=>item.status==='COMPLETED'||item.status==='FAILED'||item.status==='CANCELLED');
     if(terminal){
       localStorage.removeItem(BATCH_KEY);localStorage.removeItem(JOB_KEY);
       await releaseScreen();setPickerBusy(false);
