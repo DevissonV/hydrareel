@@ -216,7 +216,9 @@ function setProgress(state,value){const p=value??pct[state]??5;ring.style.setPro
 function setPickerBusy(busy){pick.classList.toggle('busy',busy);input.disabled=busy}
 function friendlyError(message){const raw=String(message||'');if(/ffmpeg|exited null|SIGKILL|Internal server error|statusCode|^\s*\{/i.test(raw))return 'No pudimos terminar esta edición. Tu video original quedó guardado para volver a intentarlo.';return raw||'No pudimos completar el procesamiento.'}
 function fail(message){err.hidden=false;err.textContent=friendlyError(message);localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);void releaseScreen();setPickerBusy(false);show('home')}
-function uploadWithProgress(url,headers,file){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();const started=performance.now();xhr.open('PUT',url);Object.entries(headers||{}).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.max(3,Math.round(e.loaded/e.total*18));setProgress('UPLOADING',p);const elapsed=Math.max(.25,(performance.now()-started)/1000);const bytesPerSecond=e.loaded/elapsed;const speed=bytesPerSecond/1048576;const eta=bytesPerSecond>0?(e.total-e.loaded)/bytesPerSecond:NaN;uploadMeta.textContent=(e.loaded/1048576).toFixed(1)+' MB de '+(e.total/1048576).toFixed(1)+' MB · '+speed.toFixed(1)+' MB/s'+(Number.isFinite(eta)?' · ~'+formatEta(eta):'')}};xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('Upload S3 falló: '+xhr.status));xhr.onerror=()=>reject(new Error('La subida se interrumpió. Verifica tu conexión e intenta de nuevo.'));xhr.send(file)})}
+let activeUploadRequest=null;
+let userCancelledUpload=false;
+function uploadWithProgress(url,headers,file){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();activeUploadRequest=xhr;xhr.timeout=10*60*1000;const started=performance.now();xhr.open('PUT',url);Object.entries(headers||{}).forEach(([k,v])=>xhr.setRequestHeader(k,v));xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.max(3,Math.round(e.loaded/e.total*18));setProgress('UPLOADING',p);const elapsed=Math.max(.25,(performance.now()-started)/1000);const bytesPerSecond=e.loaded/elapsed;const speed=bytesPerSecond/1048576;const eta=bytesPerSecond>0?(e.total-e.loaded)/bytesPerSecond:NaN;uploadMeta.textContent=(e.loaded/1048576).toFixed(1)+' MB de '+(e.total/1048576).toFixed(1)+' MB · '+speed.toFixed(1)+' MB/s'+(Number.isFinite(eta)?' · ~'+formatEta(eta):'')}};xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('Upload S3 falló: '+xhr.status));xhr.onerror=()=>reject(new Error('La subida se interrumpió. Verifica tu conexión e intenta de nuevo.'));xhr.ontimeout=()=>reject(new Error('La subida excedió 10 minutos. Puedes reintentar.'));xhr.onabort=()=>reject(new Error('Subida cancelada'));xhr.onloadend=()=>{if(activeUploadRequest===xhr)activeUploadRequest=null};xhr.send(file)})}
 function packText(c){const tags=(c.hashtags||[]).join(' ');return [c.socialCaption||'',tags].filter(Boolean).join('\n\n')}
 async function copyPack(c,button){try{await navigator.clipboard.writeText(packText(c));const old=button.textContent;button.textContent='✓ Copiado';setTimeout(()=>button.textContent=old,1200)}catch{alert('No pudimos copiar el texto.')}}
 const preparedVideoShares=new Map();
@@ -474,14 +476,16 @@ const cancelProcessing=document.getElementById('cancelProcessing');
 let latestBatchItems=[];
 cancelProcessing.onclick=async()=>{
   const active=latestBatchItems.filter(x=>x.id&&!['COMPLETED','FAILED','CANCELLED'].includes(x.status));
-  if(!active.length)return;
-  if(!confirm('¿Cancelar los '+active.length+' trabajos pendientes? Los originales se conservan.'))return;
+  if(!active.length&&!activeUploadRequest)return;
+  if(!confirm('¿Cancelar la subida o procesamiento? Los archivos ya guardados se conservan.'))return;
+  userCancelledUpload=true;
   cancelProcessing.disabled=true;cancelProcessing.textContent='Cancelando…';
   try{
     const responses=await Promise.all(active.map(item=>fetch('/api/jobs/'+encodeURIComponent(item.id)+'/cancel',{
       method:'POST',headers:{'x-hydra-client-id':clientId()}
     })));
     if(responses.some(r=>!r.ok))throw new Error('Algunos trabajos no pudieron cancelarse');
+    if(activeUploadRequest)activeUploadRequest.abort();
     cancelProcessing.textContent='✓ Cancelación solicitada';
   }catch(e){alert(e.message||'No pudimos cancelar');cancelProcessing.disabled=false;cancelProcessing.textContent='✕ Cancelar procesamiento'}
 };
@@ -521,13 +525,15 @@ async function handleSelectedFiles(fileList){
   if(files.length>MAX_BATCH_FILES){alert('Puedes seleccionar máximo 3 videos por lote.');input.value='';return}
   const totalBytes=files.reduce((sum,file)=>sum+file.size,0);
   if(totalBytes>MAX_BATCH_BYTES){alert('El lote supera 1 GB. Reduce el tamaño o selecciona menos videos.');input.value='';return}
-  pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);show('processing');void keepScreenAwake();
+  userCancelledUpload=false;pickerDeliveredFile=true;err.hidden=true;setPickerBusy(true);show('processing');
+  cancelProcessing.hidden=false;cancelProcessing.disabled=false;cancelProcessing.textContent='✕ Cancelar procesamiento';void keepScreenAwake();
   const batchItems=files.map((file,index)=>({name:file.name,status:index===0?'UPLOADING':'PENDING'}));
   renderBatchQueue(batchItems);
   const ids=[];
   const serverItems=[];
   try{
     for(let index=0;index<files.length;index++){
+      if(userCancelledUpload)throw new Error('Subida cancelada');
       const f=files[index];
       filenameEl.textContent=f.name;
       setProgress('UPLOADING',3);
@@ -540,8 +546,11 @@ async function handleSelectedFiles(fileList){
       const u=await r.json();
       ids.push(u.jobId);
       serverItems.push({id:u.jobId,name:f.name,status:'UPLOADING'});
+      latestBatchItems=[...serverItems];
+      if(userCancelledUpload){await fetch('/api/jobs/'+u.jobId+'/cancel',{method:'POST',headers:{'x-hydra-client-id':clientId()}});throw new Error('Subida cancelada')}
       localStorage.setItem(BATCH_KEY,JSON.stringify(ids));
       await uploadWithProgress(u.uploadUrl,u.headers,f);
+      if(userCancelledUpload)throw new Error('Subida cancelada');
       const p=await fetch('/api/jobs/'+u.jobId+'/uploaded',{method:'POST'});
       if(!p.ok)throw new Error(await p.text());
       batchItems[index].status='UPLOADED';renderBatchQueue(batchItems);
