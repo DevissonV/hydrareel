@@ -94,6 +94,7 @@ export class OpenAiClipBrainAdapter implements ClipBrainPort {
         Authorization: `Bearer ${this.config.openaiApiKey}`,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(2 * 60 * 1000),
       body: JSON.stringify({
         model: this.config.openaiClipModel,
         reasoning: { effort: 'low' },
