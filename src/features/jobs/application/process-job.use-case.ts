@@ -37,6 +37,27 @@ export class ProcessJobUseCase implements OnModuleInit {
 
   onModuleInit(): void {
     setImmediate(() => void this.recoverPendingJobs());
+    setImmediate(() => void this.cleanupStaleUploads());
+    const timer = setInterval(() => void this.cleanupStaleUploads(), 60*60*1000);
+    timer.unref();
+  }
+
+  private async cleanupStaleUploads(): Promise<void> {
+    try {
+      const cutoff = new Date(Date.now()-this.config.staleUploadRetentionHours*60*60*1000);
+      for (const job of await this.jobs.listStaleUploads(cutoff)) {
+        if (job.upload?.uploadId) {
+          await this.storage.abortMultipart(job.sourceKey, job.upload.uploadId).catch(()=>undefined);
+        }
+        await this.storage.deletePrefix('sources/'+job.id+'/').catch(()=>0);
+        job.transition('CANCELLED');
+        job.error='La subida caducó por inactividad';
+        await this.jobs.save(job);
+        jobLog(job.id,'stale_upload_cleaned');
+      }
+    } catch (error) {
+      jobLog('system','stale_upload_cleanup_failed',{ error: String(error) });
+    }
   }
 
   private async recoverPendingJobs(): Promise<void> {
