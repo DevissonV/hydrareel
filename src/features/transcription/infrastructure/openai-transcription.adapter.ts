@@ -22,6 +22,7 @@ export class OpenAiTranscriptionAdapter implements TranscriptionPort {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.config.openaiApiKey}` },
       body: form,
+      signal: AbortSignal.timeout(5 * 60 * 1000),
     });
     const body = await response.text();
     if (!response.ok) throw new Error(`OpenAI transcription HTTP ${response.status}: ${body.slice(0, 1000)}`);
