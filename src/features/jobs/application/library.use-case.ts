@@ -58,7 +58,7 @@ export class LibraryUseCase {
 
     for (const job of states) {
       const updatedAt = job.updatedAt.getTime();
-      if (job.status === 'FAILED' && updatedAt < failedCutoff) {
+      if ((job.status === 'FAILED' || job.status === 'CANCELLED') && updatedAt < failedCutoff) {
         await this.purgeProject(clientId, job.id);
       } else if (job.status === 'UPLOADING' && updatedAt < uploadCutoff) {
         await this.purgeProject(clientId, job.id);
@@ -357,7 +357,7 @@ export class LibraryUseCase {
       throw new NotFoundException('Proyecto no encontrado');
     }
 
-    if (job && !['COMPLETED', 'FAILED'].includes(job.status)) {
+    if (job && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) {
       throw new BadRequestException('Espera a que el proyecto termine antes de eliminarlo');
     }
 
