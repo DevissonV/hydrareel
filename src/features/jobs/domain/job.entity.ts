@@ -31,6 +31,13 @@ export interface JobClip {
   video: { width: number; height: number; codec: string; audioCodec: string };
 }
 
+export interface JobUpload {
+  sizeBytes: number;
+  partSize: number;
+  uploadId?: string;
+  completed?: boolean;
+}
+
 export interface JobTimings {
   transcriptionDurationMs?: number;
   analysisDurationMs?: number;
@@ -53,6 +60,7 @@ export interface JobSnapshot {
   updatedAt: string;
   status: JobStatus;
   sourceDuration?: number;
+  upload?: JobUpload;
   failureStage?: string;
   error?: string;
   clips: JobClip[];
@@ -65,6 +73,7 @@ export class Job {
   updatedAt: Date;
   status: JobStatus = 'UPLOADING';
   sourceDuration?: number;
+  upload?: JobUpload;
   failureStage?: string;
   error?: string;
   clips: JobClip[] = [];
@@ -115,6 +124,7 @@ export class Job {
       updatedAt: this.updatedAt.toISOString(),
       status: this.status,
       sourceDuration: this.sourceDuration,
+      upload: this.upload,
       failureStage: this.failureStage,
       error: this.error,
       clips: this.clips,
@@ -135,6 +145,7 @@ export class Job {
     job.updatedAt = new Date(snapshot.updatedAt);
     job.status = snapshot.status;
     job.sourceDuration = snapshot.sourceDuration;
+    job.upload = snapshot.upload;
     job.failureStage = snapshot.failureStage;
     job.error = snapshot.error;
     job.clips = snapshot.clips ?? [];

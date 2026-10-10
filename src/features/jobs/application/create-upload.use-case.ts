@@ -16,7 +16,10 @@ export class CreateUploadUseCase {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
-  async execute(fileName: string, contentType: string, requestedClientId?: string) {
+  async execute(fileName: string, contentType: string, requestedClientId?: string, sizeBytes?: number) {
+    if (sizeBytes !== undefined && (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > 1024*1024*1024)) {
+      throw new ConflictException('Tamaño inválido o archivo superior a 1 GB');
+    }
     if (this.creating) throw new ConflictException('Ya se está iniciando otro job');
     this.creating = true;
     try {
@@ -30,13 +33,23 @@ export class CreateUploadUseCase {
         : randomUUID();
       const sourceKey = `sources/${id}/source.${extension}`;
       const job = new Job(id, fileName, sourceKey, contentType || 'application/octet-stream', clientId);
+      const multipart = sizeBytes !== undefined && sizeBytes >= 16 * 1024 * 1024;
+      if (multipart) {
+        const partSize = 8 * 1024 * 1024;
+        const uploadId = await this.storage.beginMultipart(sourceKey, job.contentType);
+        job.upload = { uploadId, sizeBytes, partSize };
+        try { await this.jobs.save(job); }
+        catch (error) {
+          await this.storage.abortMultipart(sourceKey, uploadId).catch(() => undefined);
+          throw error;
+        }
+        return { jobId: id, clientId, mode: 'multipart', partSize, maxVideoMinutes: this.config.maxVideoMinutes };
+      }
+      if (sizeBytes) job.upload = { sizeBytes, partSize: sizeBytes };
       await this.jobs.save(job);
       const uploadUrl = await this.storage.createUploadUrl(sourceKey, job.contentType);
       return {
-        jobId: id,
-        clientId,
-        uploadUrl,
-        method: 'PUT',
+        jobId: id, clientId, mode: 'single', uploadUrl, method: 'PUT',
         headers: { 'Content-Type': job.contentType },
         maxVideoMinutes: this.config.maxVideoMinutes,
       };

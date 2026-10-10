@@ -2,7 +2,19 @@ import { Readable } from 'node:stream';
 
 export const OBJECT_STORAGE = Symbol('OBJECT_STORAGE');
 
+export interface UploadedPart {
+  partNumber: number;
+  etag: string;
+  size: number;
+}
+
 export interface ObjectStoragePort {
+  beginMultipart(key: string, contentType: string): Promise<string>;
+  multipartPartUrl(key: string, uploadId: string, partNumber: number): Promise<string>;
+  listMultipartParts(key: string, uploadId: string): Promise<UploadedPart[]>;
+  completeMultipart(key: string, uploadId: string, parts: UploadedPart[]): Promise<void>;
+  abortMultipart(key: string, uploadId: string): Promise<void>;
+  objectSize(key: string): Promise<number | null>;
   createUploadUrl(key: string, contentType: string): Promise<string>;
   createDownloadUrl(key: string): Promise<string>;
   createAttachmentUrl(key: string, fileName: string): Promise<string>;
