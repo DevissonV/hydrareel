@@ -17,6 +17,7 @@ import { buildLayoutPreflight } from '../../rendering/domain/composition';
 import { HeavyWorkQueue } from './heavy-work-queue';
 import { inspectVisualContext } from '../../clip-brain/application/visual-context';
 import { selectWithEditorialRecovery } from './editorial-recovery';
+import { watchMemoryPressure } from './memory-pressure';
 
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
@@ -302,6 +303,7 @@ export class ProcessJobUseCase implements OnModuleInit {
       const releaseRender = await this.renderGate.acquire(`job:${job.id}`);
       const renderController = new AbortController();
       this.activeRenderControllers.set(job.id, renderController);
+      const stopMemoryWatch = watchMemoryPressure(job.id);
       try {
       this.ensureNotCancelled(job);
       for (const [index, clip] of reviewed.clips.slice(0, this.config.maxClipsPerJob).entries()) {
@@ -382,6 +384,7 @@ export class ProcessJobUseCase implements OnModuleInit {
         });
       }
       } finally {
+        stopMemoryWatch();
         this.activeRenderControllers.delete(job.id);
         releaseRender();
       }
