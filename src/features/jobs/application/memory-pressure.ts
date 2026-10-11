@@ -26,3 +26,26 @@ export async function reportMemoryPressure(jobId: string, stage: string): Promis
     // Monitoring must never affect user jobs or consume paid AI calls.
   }
 }
+
+export function watchMemoryPressure(jobId: string): () => void {
+  let reported = false;
+  const tick = async () => {
+    if (reported) return;
+    try {
+      const [used, max] = await Promise.all([
+        readFile('/sys/fs/cgroup/memory.current', 'utf8'),
+        readFile('/sys/fs/cgroup/memory.max', 'utf8'),
+      ]);
+      if (max.trim() === 'max') return;
+      const stats = memoryPressure(Number(used.trim()), Number(max.trim()));
+      if (stats && stats.percent >= 85) {
+        reported = true;
+        jobLog(jobId, 'memory_pressure', { stage: 'rendering', ...stats });
+      }
+    } catch { /* best-effort telemetry */ }
+  };
+  void tick();
+  const timer = setInterval(() => void tick(), 5000);
+  timer.unref();
+  return () => clearInterval(timer);
+}
