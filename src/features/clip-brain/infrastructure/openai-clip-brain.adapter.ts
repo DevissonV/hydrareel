@@ -328,6 +328,7 @@ Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socia
     const approved: ClipCandidate[] = [];
     const seen = new Set<number>();
     let rejected = 0;
+    const rejectionReasons: string[] = [];
     let adjusted = 0;
     let keptOriginal = 0;
     for (const item of parsed.clips ?? []) {
@@ -336,6 +337,8 @@ Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socia
       seen.add(index);
       if (item.approved !== true) {
         rejected += 1;
+        const reason = String(item.reason ?? '').trim().slice(0, 220);
+        if (reason) rejectionReasons.push(reason);
         continue;
       }
       const original = clips[index];
@@ -372,6 +375,7 @@ Mantén packaging social-native: title <=80; hook corto para 1-3 segundos; socia
         editorialReview: usage,
         approved: normalized.length,
         rejected,
+        rejectionReasons: rejectionReasons.slice(0, 5),
         adjusted,
         keptOriginal,
       },
