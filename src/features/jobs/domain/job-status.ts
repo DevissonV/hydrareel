@@ -5,6 +5,7 @@ export const JOB_STATUSES = [
   'ANALYZING',
   'RENDERING',
   'COMPLETED',
+  'NO_CLIPS',
   'FAILED',
   'CANCELLED',
 ] as const;
@@ -15,9 +16,10 @@ const allowed: Record<JobStatus, JobStatus[]> = {
   UPLOADING: ['UPLOADED', 'FAILED', 'CANCELLED'],
   UPLOADED: ['TRANSCRIBING', 'FAILED', 'CANCELLED'],
   TRANSCRIBING: ['ANALYZING', 'FAILED', 'CANCELLED'],
-  ANALYZING: ['RENDERING', 'FAILED', 'CANCELLED'],
+  ANALYZING: ['RENDERING', 'NO_CLIPS', 'FAILED', 'CANCELLED'],
   RENDERING: ['COMPLETED', 'FAILED', 'CANCELLED'],
   COMPLETED: [],
+  NO_CLIPS: ['COMPLETED'],
   FAILED: [],
   CANCELLED: [],
 };
@@ -27,5 +29,5 @@ export function assertTransition(from: JobStatus, to: JobStatus): void {
 }
 
 export function isTerminal(status: JobStatus): boolean {
-  return status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED';
+  return status === 'COMPLETED' || status === 'NO_CLIPS' || status === 'FAILED' || status === 'CANCELLED';
 }

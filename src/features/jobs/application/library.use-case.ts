@@ -361,7 +361,7 @@ export class LibraryUseCase {
       throw new NotFoundException('Proyecto no encontrado');
     }
 
-    if (job && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) {
+    if (job && !['COMPLETED', 'NO_CLIPS', 'FAILED', 'CANCELLED'].includes(job.status)) {
       throw new BadRequestException('Espera a que el proyecto termine antes de eliminarlo');
     }
 
