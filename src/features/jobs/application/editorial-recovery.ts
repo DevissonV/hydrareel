@@ -4,7 +4,7 @@ import { Transcript } from '../../transcription/domain/transcript';
 export interface EditorialSelectionResult {
   selected: ClipBrainResult;
   reviewed: ClipBrainResult;
-  recovery?: { selected: ClipBrainResult; reviewed: ClipBrainResult };
+  recovery?: { selected: ClipBrainResult; reviewed: ClipBrainResult; initialReview: ClipBrainResult };
 }
 
 /**
@@ -24,12 +24,12 @@ export async function selectWithEditorialRecovery(
   if (!alternatives.clips.length) {
     return {
       selected, reviewed,
-      recovery: { selected: alternatives, reviewed: { clips: [], usage: { skipped: 'no_alternatives' } } },
+      recovery: { selected: alternatives, reviewed: { clips: [], usage: { skipped: 'no_alternatives' } }, initialReview: reviewed },
     };
   }
   const secondReview = await brain.review(transcript, alternatives.clips);
   return {
     selected, reviewed: secondReview,
-    recovery: { selected: alternatives, reviewed: secondReview },
+    recovery: { selected: alternatives, reviewed: secondReview, initialReview: reviewed },
   };
 }
