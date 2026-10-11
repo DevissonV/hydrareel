@@ -497,7 +497,7 @@ async function fetchJob(id){
 const cancelProcessing=document.getElementById('cancelProcessing');
 let latestBatchItems=[];
 cancelProcessing.onclick=async()=>{
-  const active=latestBatchItems.filter(x=>x.id&&!['COMPLETED','FAILED','CANCELLED'].includes(x.status));
+  const active=latestBatchItems.filter(x=>x.id&&!['COMPLETED','NO_CLIPS','FAILED','CANCELLED'].includes(x.status));
   if(!active.length&&!activeUploadRequest&&!uploadInProgress&&!readUploadSession())return;
   if(!confirm('¿Cancelar la subida o procesamiento? Los archivos ya guardados se conservan.'))return;
   userCancelledUpload=true;
@@ -522,10 +522,10 @@ async function pollBatch(ids,initialItems=[]){
       return job?{...job,name:names.get(id)||job.originalFileName}:{id,name:names.get(id)||('Video '+(index+1)),status:'UPLOADED'};
     });
     latestBatchItems=items;
-    cancelProcessing.hidden=!items.some(x=>x.id&&!['COMPLETED','FAILED','CANCELLED'].includes(x.status));
+    cancelProcessing.hidden=!items.some(x=>x.id&&!['COMPLETED','NO_CLIPS','FAILED','CANCELLED'].includes(x.status));
     if(!cancelProcessing.hidden){cancelProcessing.disabled=false;cancelProcessing.textContent='✕ Cancelar procesamiento'}
     renderBatchQueue(items);
-    const current=items.find(item=>!['COMPLETED','FAILED','CANCELLED','UPLOADED'].includes(item.status))||items.find(item=>item.status==='UPLOADED');
+    const current=items.find(item=>!['COMPLETED','NO_CLIPS','FAILED','CANCELLED','UPLOADED'].includes(item.status))||items.find(item=>item.status==='UPLOADED');
     if(current){
       filenameEl.textContent=current.name||current.originalFileName||'Video en proceso';
       setProgress(current.status);
