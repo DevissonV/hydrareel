@@ -231,10 +231,6 @@ export class RegenerateClipUseCase {
 
       const job = await this.jobs.get(jobId);
       if (job && job.clientId === clientId) {
-        if (job.status === 'NO_CLIPS' && added.length) {
-          job.transition('COMPLETED');
-          job.error = undefined;
-        }
         job.clips = job.clips.map((clip) => clip.index === clipIndex ? updated : clip);
         await this.jobs.save(job);
       }
@@ -431,6 +427,10 @@ export class RegenerateClipUseCase {
 
       const job = await this.jobs.get(jobId);
       if (job && job.clientId === clientId) {
+        if (job.status === 'NO_CLIPS' && added.length) {
+          job.transition('COMPLETED');
+          job.error = undefined;
+        }
         job.clips = [...manifest.clips];
         await this.jobs.save(job);
       }
