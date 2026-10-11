@@ -231,6 +231,10 @@ export class RegenerateClipUseCase {
 
       const job = await this.jobs.get(jobId);
       if (job && job.clientId === clientId) {
+        if (job.status === 'NO_CLIPS' && added.length) {
+          job.transition('COMPLETED');
+          job.error = undefined;
+        }
         job.clips = job.clips.map((clip) => clip.index === clipIndex ? updated : clip);
         await this.jobs.save(job);
       }
@@ -332,8 +336,18 @@ export class RegenerateClipUseCase {
         return { added: 0, clips: [] };
       }
 
-      const candidatesToRender = pool.slice(0, 2);
-      const remainingCandidates = pool.slice(2);
+      // Manual discovery must pass the same editorial gate as the initial run.
+      // Review before any source download or FFmpeg work to avoid wasted resources.
+      const approved = await this.clipBrain.review(transcript, pool.slice(0, 4));
+      const candidatesToRender = approved.clips.slice(0, 2).filter(stillUnique);
+      const remainingCandidates = approved.clips.slice(2).filter(stillUnique);
+      if (!candidatesToRender.length) {
+        manifest.editorialCache = {
+          candidates: [], exhausted: true, updatedAt: new Date().toISOString(),
+        };
+        await this.storage.putJson(manifestKey, manifest);
+        return { added: 0, clips: [] };
+      }
 
       await mkdir(dir, { recursive: true });
       await this.storage.downloadToFile(manifest.sourceKey, sourcePath);
