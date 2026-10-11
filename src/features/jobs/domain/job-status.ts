@@ -19,7 +19,7 @@ const allowed: Record<JobStatus, JobStatus[]> = {
   ANALYZING: ['RENDERING', 'NO_CLIPS', 'FAILED', 'CANCELLED'],
   RENDERING: ['COMPLETED', 'FAILED', 'CANCELLED'],
   COMPLETED: [],
-  NO_CLIPS: [],
+  NO_CLIPS: ['COMPLETED'],
   FAILED: [],
   CANCELLED: [],
 };
