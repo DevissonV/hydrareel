@@ -16,6 +16,7 @@ import { emptyProjectMetrics } from '../domain/project-metrics';
 import { buildLayoutPreflight } from '../../rendering/domain/composition';
 import { HeavyWorkQueue } from './heavy-work-queue';
 import { inspectVisualContext } from '../../clip-brain/application/visual-context';
+import { selectWithEditorialRecovery } from './editorial-recovery';
 
 @Injectable()
 export class ProcessJobUseCase implements OnModuleInit {
@@ -82,12 +83,18 @@ export class ProcessJobUseCase implements OnModuleInit {
     this.kickQueue();
   }
 
+  private editorialReasons(usage: unknown): string[] {
+    if (!usage || typeof usage !== 'object') return [];
+    const reasons = (usage as { rejectionReasons?: unknown }).rejectionReasons;
+    return Array.isArray(reasons) ? reasons.filter((v): v is string => typeof v === 'string').map(v=>v.slice(0, 180)) : [];
+  }
+
   async cancel(jobId: string, clientId: string | undefined): Promise<{ status: string }> {
     if (!clientId) throw new BadRequestException('Identificador de cliente requerido');
     const job = await this.jobs.get(jobId);
     if (!job || job.clientId !== clientId) throw new NotFoundException('Proyecto no encontrado');
     if (job.status === 'CANCELLED') return { status: 'CANCELLED' };
-    if (job.status === 'COMPLETED' || job.status === 'FAILED') {
+    if (job.status === 'COMPLETED' || job.status === 'NO_CLIPS' || job.status === 'FAILED') {
       throw new BadRequestException('El proyecto ya terminó');
     }
     job.transition('CANCELLED');
@@ -238,19 +245,57 @@ export class ProcessJobUseCase implements OnModuleInit {
       await this.jobs.save(job);
       const a0 = Date.now();
       const visualContext = await inspectVisualContext(sourcePath, transcript, this.config);
-      const selected = await this.clipBrain.select(transcript, visualContext);
       jobLog(job.id, 'visual_context_checked', { enriched: Boolean(visualContext) });
-      const reviewed = await this.clipBrain.review(transcript, selected.clips);
+      const editorial = await selectWithEditorialRecovery(this.clipBrain, transcript, visualContext);
+      const { selected, reviewed, recovery } = editorial;
       job.timings.analysisDurationMs = Date.now() - a0;
-      job.usage.analysis = { selection: selected.usage, editorialReview: reviewed.usage };
+      job.usage.analysis = {
+        selection: selected.usage,
+        editorialReview: recovery ? (await recovery.initialReview.usage) : reviewed.usage,
+        recoverySelection: recovery?.selected.usage,
+        recoveryReview: recovery?.reviewed.usage,
+        recoveryAttempted: Boolean(recovery),
+      };
       jobLog(job.id, 'analysis_completed', {
         analysisDurationMs: job.timings.analysisDurationMs,
         candidatesSelected: selected.clips.length,
         candidatesApproved: reviewed.clips.length,
+        recoveryAttempted: Boolean(recovery),
+        recoveredClips: recovery?.reviewed.clips.length ?? 0,
         model: this.config.openaiClipModel,
       });
-
       this.ensureNotCancelled(job);
+      if (!reviewed.clips.length) {
+        const reasons = [
+          ...this.editorialReasons((job.usage.analysis as any)?.editorialReview),
+          ...this.editorialReasons(recovery?.reviewed.usage),
+        ].slice(0, 3);
+        const message = reasons.length
+          ? 'Hydra no encontró clips publicables después de una revisión adicional. Motivos: ' + reasons.join(' | ')
+          : 'Hydra revisó el video dos veces y no encontró un momento que cumpliera los criterios editoriales.';
+        job.error = message.slice(0, 700);
+        job.timings.totalDurationMs = Date.now() - started;
+        const completedAt = new Date().toISOString();
+        const metrics = emptyProjectMetrics();
+        metrics.initialProcessingDurationMs = job.timings.totalDurationMs;
+        await this.storage.putJson(`clients/${job.clientId}/jobs/${job.id}.json`, {
+          id: job.id, clientId: job.clientId, originalFileName: job.originalFileName,
+          sourceKey: job.sourceKey, sourceDuration: job.sourceDuration,
+          createdAt: job.createdAt.toISOString(), completedAt,
+          processingDurationMs: job.timings.totalDurationMs, metrics,
+          clips: [], editorialReasons: reasons,
+        });
+        job.transition('NO_CLIPS');
+        await this.jobs.save(job);
+        jobLog(job.id, 'job_no_clips', {
+          candidatesSelected: selected.clips.length,
+          recoveryAttempted: Boolean(recovery),
+          recoveryCandidates: recovery?.selected.clips.length ?? 0,
+          analysisDurationMs: job.timings.analysisDurationMs,
+          usage: job.usage,
+        });
+        return;
+      }
       job.transition('RENDERING');
       await this.jobs.save(job);
       const r0 = Date.now();
