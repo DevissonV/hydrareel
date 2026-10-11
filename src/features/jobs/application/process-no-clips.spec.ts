@@ -18,7 +18,7 @@ describe('end-to-end state for empty editorial review', () => {
     const storage = {
       downloadToFile: vi.fn(async () => undefined),
       getJson: vi.fn(async () => { throw new Error('No cache'); }),
-      putJson: vi.fn(async () => undefined),
+      putJson: vi.fn(async (_key: string, _data: unknown) => undefined),
     };
     const brain = {
       select: vi.fn(async () => ({ clips: [candidate], usage: { total_tokens: 100 } })),
