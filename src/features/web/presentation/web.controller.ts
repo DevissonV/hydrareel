@@ -126,7 +126,7 @@ const html = String.raw`<!doctype html>
     </section>
 
     <section id="results" hidden class="results">
-      <div class="result-head"><div><span class="eyebrow">✦ LISTO PARA PUBLICAR</span><h2 style="margin-top:12px">Tu contenido está listo</h2><p id="resultCopy">Hydra terminó la edición.</p></div><div class="result-actions"><button id="findMore" class="secondary">✦ Buscar más clips</button><button id="again" class="secondary">↻ Crear otro</button></div></div>
+      <div class="result-head"><div><span id="resultEyebrow" class="eyebrow">✦ LISTO PARA PUBLICAR</span><h2 id="resultHeading" style="margin-top:12px">Tu contenido está listo</h2><p id="resultCopy">Hydra terminó la edición.</p></div><div class="result-actions"><button id="findMore" class="secondary">✦ Buscar más clips</button><button id="again" class="secondary">↻ Crear otro</button></div></div>
       <div id="resultSummary" class="result-summary"></div>
       <div id="clips" class="clips"></div>
     </section>
@@ -451,7 +451,20 @@ function addClip(c,total,jobId,fallbackGeneratedAt){
   const editorial=document.createElement('details');editorial.className='editorial-note';const es=document.createElement('summary');es.textContent='Por qué Hydra eligió este momento';const ep=document.createElement('p');ep.textContent=c.reason;editorial.append(es,ep);
   details.append(clipStatus,titleRow,meta,magic,pack,download,correct,feedback);if(!activeResult?.status||activeResult.status==='COMPLETED')details.append(refine);details.append(editorial);card.append(toolbar,shell,preflight,details);clips.appendChild(card)
 }
-function render(job){activeResult={...job,clips:[...(job.clips||[])]};clips.innerHTML='';resultSummary.innerHTML='';findMore.hidden=activeResult.status&&activeResult.status!=='COMPLETED';findMore.disabled=false;findMore.textContent='✦ Buscar más clips';const list=activeResult.clips;const ready=totalClipSeconds(list);resultCopy.textContent=(activeResult.sourceDuration?mediaTime(activeResult.sourceDuration)+' original → ':'')+list.length+' '+(list.length===1?'clip':'clips')+' → '+mediaTime(ready)+' listos';const summaryItems=[];if(activeResult.sourceDuration)summaryItems.push(['Original',mediaTime(activeResult.sourceDuration)]);summaryItems.push(['Clips',String(list.length)]);if(ready>0)summaryItems.push(['Contenido listo',mediaTime(ready)]);if(activeResult.timings?.totalDurationMs)summaryItems.push(['Procesado en',mediaTime(activeResult.timings.totalDurationMs/1000)]);for(const [label,value] of summaryItems){const pill=document.createElement('span');pill.className='summary-pill';pill.innerHTML=label+' <strong>'+value+'</strong>';resultSummary.appendChild(pill)}const generatedFallback=activeResult.completedAt||activeResult.updatedAt||activeResult.createdAt;list.forEach(c=>addClip(c,list.length,activeResult.id,generatedFallback));show('results')}
+function render(job){
+  activeResult={...job,clips:[...(job.clips||[])]};
+  clips.innerHTML='';resultSummary.innerHTML='';
+  const list=activeResult.clips;
+  const noClips=list.length===0&&(activeResult.status==='NO_CLIPS'||activeResult.status==='COMPLETED');
+  const eyebrow=document.getElementById('resultEyebrow');
+  const heading=document.getElementById('resultHeading');
+  eyebrow.textContent=noClips?'✦ REVISIÓN EDITORIAL TERMINADA':'✦ LISTO PARA PUBLICAR';
+  heading.textContent=noClips?'No encontramos clips publicables':'Tu contenido está listo';
+  findMore.hidden=!!(activeResult.status&&activeResult.status!=='COMPLETED'&&activeResult.status!=='NO_CLIPS');
+  findMore.disabled=false;
+  findMore.textContent=noClips?'✦ Intentar buscar otros momentos':'✦ Buscar más clips';
+  const ready=totalClipSeconds(list);
+  resultCopy.textContent=noClips?(activeResult.error||'Hydra analizó el video y descartó los candidatos. Puedes buscar momentos alternativos o subir otro archivo.'):(activeResult.sourceDuration?mediaTime(activeResult.sourceDuration)+' original → ':'')+list.length+' '+(list.length===1?'clip':'clips')+' → '+mediaTime(ready)+' listos';const summaryItems=[];if(activeResult.sourceDuration)summaryItems.push(['Original',mediaTime(activeResult.sourceDuration)]);summaryItems.push(['Clips',String(list.length)]);if(ready>0)summaryItems.push(['Contenido listo',mediaTime(ready)]);if(activeResult.timings?.totalDurationMs)summaryItems.push(['Procesado en',mediaTime(activeResult.timings.totalDurationMs/1000)]);for(const [label,value] of summaryItems){const pill=document.createElement('span');pill.className='summary-pill';pill.innerHTML=label+' <strong>'+value+'</strong>';resultSummary.appendChild(pill)}const generatedFallback=activeResult.completedAt||activeResult.updatedAt||activeResult.createdAt;list.forEach(c=>addClip(c,list.length,activeResult.id,generatedFallback));show('results')}
 function queueStateLabel(status){
   if(status==='UPLOADING')return 'Subiendo';if(status==='STORED')return 'Guardado';if(status==='PENDING')return 'Pendiente';
   if(status==='UPLOADED')return 'En cola';
@@ -459,6 +472,7 @@ function queueStateLabel(status){
   if(status==='ANALYZING')return 'Analizando';
   if(status==='RENDERING')return 'Editando';
   if(status==='COMPLETED')return '✓ Listo';
+  if(status==='NO_CLIPS')return 'Sin clips';
   if(status==='FAILED')return 'Error';if(status==='CANCELLED')return 'Cancelado';if(status==='CANCELLED')return 'Cancelado';
   return 'Pendiente';
 }
@@ -517,11 +531,11 @@ async function pollBatch(ids,initialItems=[]){
       setProgress(current.status);
       uploadMeta.textContent=current.status==='UPLOADED'?'En cola · Hydra lo procesará automáticamente':current.status==='TRANSCRIBING'?'Entendiendo todo lo que se dice…':current.status==='ANALYZING'?'Eligiendo momentos que funcionan por sí solos…':current.status==='RENDERING'?'Aplicando Magic Edit…':'Procesando…';
     }
-    const terminal=items.every(item=>item.status==='COMPLETED'||item.status==='FAILED'||item.status==='CANCELLED');
+    const terminal=items.every(item=>['COMPLETED','NO_CLIPS','FAILED','CANCELLED'].includes(item.status));
     if(terminal){
       localStorage.removeItem(BATCH_KEY);localStorage.removeItem(JOB_KEY);
       await releaseScreen();setPickerBusy(false);
-      const completed=items.filter(item=>item.status==='COMPLETED');
+      const completed=items.filter(item=>['COMPLETED','NO_CLIPS'].includes(item.status));
       if(items.length===1&&completed.length===1&&currentSection!=='library'){render(completed[0]);return}
       await loadLibrary();return;
     }
@@ -750,11 +764,11 @@ input.addEventListener('change',()=>void handleSelectedFiles(input.files));
 
 function formatDate(value){try{return new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))}catch{return value}}
 function projectTitle(p){const raw=(p.originalFileName||'').replace(/\.[^.]+$/,'').trim();const ugly=/^[0-9a-f-]{24,}$/i.test(raw)||/^v?\d{10,}/i.test(raw);return ugly?(p.clips?.[0]?.title||'Proyecto HydraReel'):raw}
-function openLibraryProject(p){if(p.status!=='COMPLETED'&&!(p.clips||[]).length){localStorage.setItem(JOB_KEY,p.id);void resumeActiveJob(true);return}render({id:p.id,status:p.status,sourceDuration:p.sourceDuration,createdAt:p.createdAt,updatedAt:p.updatedAt,completedAt:p.completedAt,processingDurationMs:p.processingDurationMs,timings:p.processingDurationMs?{totalDurationMs:p.processingDurationMs}:undefined,clips:p.clips||[]})}
-function statusLabel(status){if(status==='COMPLETED')return '✓ Listo';if(status==='FAILED')return 'Error';if(status==='UPLOADING')return 'Subiendo';return '● Procesando'}
+function openLibraryProject(p){if(!['COMPLETED','NO_CLIPS'].includes(p.status)&&!(p.clips||[]).length){localStorage.setItem(JOB_KEY,p.id);void resumeActiveJob(true);return}render({id:p.id,status:p.status,sourceDuration:p.sourceDuration,createdAt:p.createdAt,updatedAt:p.updatedAt,completedAt:p.completedAt,processingDurationMs:p.processingDurationMs,timings:p.processingDurationMs?{totalDurationMs:p.processingDurationMs}:undefined,clips:p.clips||[],error:p.error})}
+function statusLabel(status,clipCount){if(status==='NO_CLIPS'||status==='COMPLETED'&&clipCount===0)return 'Sin clips';if(status==='COMPLETED')return '✓ Listo';if(status==='FAILED')return 'Error';if(status==='UPLOADING')return 'Subiendo';return '● Procesando'}
 function statusProgress(status){return pct[status]??(status==='UPLOADED'?23:10)}
-async function loadLibrary(){show('library');libraryGrid.innerHTML='<div class="empty">Cargando tus proyectos…</div>';try{const r=await fetch('/api/library',{headers:{'x-hydra-client-id':clientId()}});if(!r.ok)throw new Error('No pudimos cargar tu biblioteca');const projects=await r.json();libraryGrid.innerHTML='';if(!projects.length){libraryGrid.innerHTML='<div class="empty"><b>Aún no tienes proyectos.</b><br>Los trabajos en proceso y los clips terminados aparecerán aquí.</div>';return}for(const p of projects){const card=document.createElement('article');card.className='project-card';const preview=document.createElement('div');preview.className='project-preview';const first=p.clips&&p.clips[0];if(first){const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='metadata';v.src=first.url;preview.appendChild(v)}const state=document.createElement('span');state.className='library-status '+(p.status==='COMPLETED'?'done':p.status==='FAILED'?'fail':'live');state.textContent=statusLabel(p.status);preview.appendChild(state);const count=document.createElement('span');count.className='library-count';const clipCount=p.clips?.length||0;count.textContent=p.status==='COMPLETED'?(clipCount+' '+(clipCount===1?'clip':'clips')):(clipCount+' '+(clipCount===1?'listo':'listos')+' · '+statusProgress(p.status)+'%');preview.appendChild(count);const body=document.createElement('div');body.className='project-body';const name=document.createElement('div');name.className='project-name';name.textContent=projectTitle(p);const meta=document.createElement('div');meta.className='project-meta';const readySeconds=totalClipSeconds(p.clips||[]);const parts=[];const generatedProjectAt=p.completedAt||p.updatedAt||p.createdAt;if(generatedProjectAt)parts.push('Generado '+formatDate(generatedProjectAt));if(p.sourceDuration)parts.push(mediaTime(p.sourceDuration)+' original');if(p.status==='COMPLETED')parts.push((p.clips?.length||0)+' '+((p.clips?.length||0)===1?'clip':'clips'));if(readySeconds>0)parts.push(mediaTime(readySeconds)+' listos');meta.textContent=parts.join(' · ');const actions=document.createElement('div');actions.className='project-actions';const view=document.createElement('button');view.className='view-project';view.textContent=p.status==='COMPLETED'?'Ver clips':(p.clips?.length?'Ver '+p.clips.length+' listos':'Ver progreso');view.onclick=()=>openLibraryProject(p);actions.append(view);
-if(!['COMPLETED','FAILED','CANCELLED'].includes(p.status)){
+async function loadLibrary(){show('library');libraryGrid.innerHTML='<div class="empty">Cargando tus proyectos…</div>';try{const r=await fetch('/api/library',{headers:{'x-hydra-client-id':clientId()}});if(!r.ok)throw new Error('No pudimos cargar tu biblioteca');const projects=await r.json();libraryGrid.innerHTML='';if(!projects.length){libraryGrid.innerHTML='<div class="empty"><b>Aún no tienes proyectos.</b><br>Los trabajos en proceso y los clips terminados aparecerán aquí.</div>';return}for(const p of projects){const card=document.createElement('article');card.className='project-card';const preview=document.createElement('div');preview.className='project-preview';const first=p.clips&&p.clips[0];if(first){const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='metadata';v.src=first.url;preview.appendChild(v)}const state=document.createElement('span');state.className='library-status '+(p.status==='NO_CLIPS'||p.status==='COMPLETED'&&!(p.clips||[]).length?'fail':p.status==='COMPLETED'?'done':p.status==='FAILED'?'fail':'live');state.textContent=statusLabel(p.status,(p.clips||[]).length);preview.appendChild(state);const count=document.createElement('span');count.className='library-count';const clipCount=p.clips?.length||0;count.textContent=(p.status==='NO_CLIPS'||p.status==='COMPLETED'&&clipCount===0)?'0 clips · revisión terminada':p.status==='COMPLETED'?(clipCount+' '+(clipCount===1?'clip':'clips')):(clipCount+' '+(clipCount===1?'listo':'listos')+' · '+statusProgress(p.status)+'%');preview.appendChild(count);const body=document.createElement('div');body.className='project-body';const name=document.createElement('div');name.className='project-name';name.textContent=projectTitle(p);const meta=document.createElement('div');meta.className='project-meta';const readySeconds=totalClipSeconds(p.clips||[]);const parts=[];const generatedProjectAt=p.completedAt||p.updatedAt||p.createdAt;if(generatedProjectAt)parts.push('Generado '+formatDate(generatedProjectAt));if(p.sourceDuration)parts.push(mediaTime(p.sourceDuration)+' original');if(p.status==='COMPLETED')parts.push((p.clips?.length||0)+' '+((p.clips?.length||0)===1?'clip':'clips'));if(readySeconds>0)parts.push(mediaTime(readySeconds)+' listos');meta.textContent=parts.join(' · ');const actions=document.createElement('div');actions.className='project-actions';const view=document.createElement('button');view.className='view-project';view.textContent=(p.status==='NO_CLIPS'||p.status==='COMPLETED'&&!(p.clips||[]).length)?'Ver revisión':p.status==='COMPLETED'?'Ver clips':(p.clips?.length?'Ver '+p.clips.length+' listos':'Ver progreso');view.onclick=()=>openLibraryProject(p);actions.append(view);
+if(!['COMPLETED','NO_CLIPS','FAILED','CANCELLED'].includes(p.status)){
   const stop=document.createElement('button');stop.className='danger';stop.textContent='Cancelar';
   stop.onclick=async()=>{
     if(!confirm('¿Cancelar este proyecto? El original se conserva.'))return;
@@ -766,7 +780,7 @@ if(!['COMPLETED','FAILED','CANCELLED'].includes(p.status)){
     }catch(error){stop.disabled=false;stop.textContent='Cancelar';alert(error.message||'Error al cancelar')}
   };actions.append(stop);
 }
-if(p.status==='COMPLETED'||p.status==='FAILED'||p.status==='CANCELLED'){const del=document.createElement('button');del.className='danger';del.title='Borrar proyecto y liberar almacenamiento';del.setAttribute('aria-label','Borrar proyecto');del.onclick=async()=>{if(!confirm('¿Eliminar este proyecto y sus archivos del almacenamiento? Esta acción no se puede deshacer.'))return;del.disabled=true;const dr=await fetch('/api/library/'+p.id,{method:'DELETE',headers:{'x-hydra-client-id':clientId()}});if(!dr.ok){del.disabled=false;let msg='No pudimos borrar el proyecto.';try{const body=await dr.json();if(body.message)msg=body.message}catch{}alert(msg);return}card.remove();if(!libraryGrid.children.length)libraryGrid.innerHTML='<div class="empty">No tienes proyectos guardados.</div>'};actions.append(del)}body.append(name,meta,actions);card.append(preview,body);libraryGrid.append(card)}}catch(e){libraryGrid.innerHTML='<div class="empty">'+friendlyError(e.message||e)+'</div>'}}
+if(p.status==='COMPLETED'||p.status==='NO_CLIPS'||p.status==='FAILED'||p.status==='CANCELLED'){const del=document.createElement('button');del.className='danger';del.title='Borrar proyecto y liberar almacenamiento';del.setAttribute('aria-label','Borrar proyecto');del.onclick=async()=>{if(!confirm('¿Eliminar este proyecto y sus archivos del almacenamiento? Esta acción no se puede deshacer.'))return;del.disabled=true;const dr=await fetch('/api/library/'+p.id,{method:'DELETE',headers:{'x-hydra-client-id':clientId()}});if(!dr.ok){del.disabled=false;let msg='No pudimos borrar el proyecto.';try{const body=await dr.json();if(body.message)msg=body.message}catch{}alert(msg);return}card.remove();if(!libraryGrid.children.length)libraryGrid.innerHTML='<div class="empty">No tienes proyectos guardados.</div>'};actions.append(del)}body.append(name,meta,actions);card.append(preview,body);libraryGrid.append(card)}}catch(e){libraryGrid.innerHTML='<div class="empty">'+friendlyError(e.message||e)+'</div>'}}
 async function resumeActiveJob(showProgress){
   const remembered=readUploadSession();
   let ids=[];
@@ -818,10 +832,10 @@ async function resumeActiveJob(showProgress){
     return true;
   }
   setUploadNotice('Todos los archivos están en cola en el servidor. Ya puedes salir y volver después.',true);
-  const terminal=jobs.every(j=>['COMPLETED','FAILED','CANCELLED'].includes(j.status));
+  const terminal=jobs.every(j=>['COMPLETED','NO_CLIPS','FAILED','CANCELLED'].includes(j.status));
   if(terminal){
     localStorage.removeItem(JOB_KEY);localStorage.removeItem(BATCH_KEY);
-    const completed=jobs.filter(j=>j.status==='COMPLETED');
+    const completed=jobs.filter(j=>['COMPLETED','NO_CLIPS'].includes(j.status));
     if(showProgress&&jobs.length===1&&completed.length===1)render(completed[0]);else if(showProgress)await loadLibrary();
     return true;
   }
