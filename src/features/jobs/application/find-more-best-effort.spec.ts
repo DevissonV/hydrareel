@@ -27,7 +27,7 @@ describe('manual recovery for existing NO_CLIPS projects', () => {
     const manifest = {
       id: jobId, clientId, sourceKey: 'sources/' + jobId + '/original.mp4',
       createdAt: new Date().toISOString(), completedAt: new Date().toISOString(), clips: [],
-      editorialCache: { candidates: [], exhausted: true, updatedAt: new Date().toISOString() },
+      editorialCache: { candidates: [], exhausted: true, bestEffortAttempted: undefined as boolean | undefined, updatedAt: new Date().toISOString() },
     };
     const job = {
       id: jobId, clientId, clips: [], status: 'NO_CLIPS', error: 'Sin clips',
