@@ -14,7 +14,7 @@ export interface EditorialSelectionResult {
  * word-aligned bounds are technically valid. Rendering, TikTok safe zones and
  * MP4 checks remain exactly the same as for regular clips.
  */
-function bestEffortClip(transcript: Transcript, candidates: ClipCandidate[]): ClipBrainResult | undefined {
+export function bestEffortClip(transcript: Transcript, candidates: ClipCandidate[]): ClipBrainResult | undefined {
   const maxSeconds = Math.min(transcript.duration, transcript.duration < 60 ? 30 : 60);
   if (!Number.isFinite(maxSeconds) || maxSeconds < 8) return undefined;
 
