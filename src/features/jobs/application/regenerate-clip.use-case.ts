@@ -13,6 +13,7 @@ import { RenderGate } from './render-gate';
 import { JOB_REPOSITORY, JobRepository } from './job.repository';
 import { normalizeProjectMetrics, ProjectMetrics } from '../domain/project-metrics';
 import { buildLayoutPreflight } from '../../rendering/domain/composition';
+import { bestEffortClip } from './editorial-recovery';
 import { HeavyWorkQueue } from './heavy-work-queue';
 
 type RegenerateMode = 'shorter' | 'longer' | 'alternative' | 'restyle';
@@ -31,6 +32,7 @@ interface LibraryManifest {
     candidates: ClipCandidate[];
     exhausted: boolean;
     updatedAt: string;
+    bestEffortAttempted?: boolean;
   };
 }
 
@@ -315,17 +317,25 @@ export class RegenerateClipUseCase {
 
       let pool = (manifest.editorialCache?.candidates ?? []).filter(stillUnique);
       let exhausted = manifest.editorialCache?.exhausted ?? false;
+      let bestEffortAttempted = manifest.editorialCache?.bestEffortAttempted ?? false;
+      // Historic NO_CLIPS jobs can be rescued from the original source without
+      // another upload. Give previously exhausted jobs one new bounded attempt.
+      const recoverEmptyProject = !manifest.clips.length && !bestEffortAttempted;
 
-      if (!pool.length && !exhausted) {
-        const more = await this.clipBrain.selectMore(transcript, existingCandidates, 4);
+      if (!pool.length && (!exhausted || recoverEmptyProject)) {
+        const more = recoverEmptyProject
+          ? await this.clipBrain.select(transcript)
+          : await this.clipBrain.selectMore(transcript, existingCandidates, 4);
         pool = more.clips.filter(stillUnique);
-        exhausted = more.clips.length < 4;
+        exhausted = recoverEmptyProject ? false : more.clips.length < 4;
+        if (recoverEmptyProject) bestEffortAttempted = true;
       }
 
       if (!pool.length) {
         manifest.editorialCache = {
           candidates: [],
           exhausted: true,
+          bestEffortAttempted,
           updatedAt: new Date().toISOString(),
         };
         await this.storage.putJson(manifestKey, manifest);
@@ -335,11 +345,14 @@ export class RegenerateClipUseCase {
       // Manual discovery must pass the same editorial gate as the initial run.
       // Review before any source download or FFmpeg work to avoid wasted resources.
       const approved = await this.clipBrain.review(transcript, pool.slice(0, 4));
-      const candidatesToRender = approved.clips.slice(0, 2).filter(stillUnique);
+      const renderable = approved.clips.length
+        ? approved.clips
+        : !manifest.clips.length ? bestEffortClip(transcript, pool.slice(0, 4))?.clips ?? [] : [];
+      const candidatesToRender = renderable.slice(0, 2).filter(stillUnique);
       const remainingCandidates = approved.clips.slice(2).filter(stillUnique);
       if (!candidatesToRender.length) {
         manifest.editorialCache = {
-          candidates: [], exhausted: true, updatedAt: new Date().toISOString(),
+          candidates: [], exhausted: true, bestEffortAttempted, updatedAt: new Date().toISOString(),
         };
         await this.storage.putJson(manifestKey, manifest);
         return { added: 0, clips: [] };
@@ -421,6 +434,7 @@ export class RegenerateClipUseCase {
       manifest.editorialCache = {
         candidates: remainingCandidates,
         exhausted,
+        bestEffortAttempted,
         updatedAt: new Date().toISOString(),
       };
       await this.storage.putJson(manifestKey, manifest);
